@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Places, Please</title>
+  <!-- Fill the phone screen, no pinch-zoom, draw under the notch. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <!-- These let the game be added to the Home Screen and open like an app. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Places, Please">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section id="screen-home" class="screen" hidden>
+    <header class="home-top">
+      <h1 id="home-title" class="title">Places, Please</h1>
+    </header>
+    <div class="home-mid">
+      <div class="card">
+        <div id="home-tier" class="label"></div>
+        <div id="home-level" class="big"></div>
+      </div>
+      <div class="pair">
+        <div class="card"><div class="label">Coins</div><div id="home-coins" class="mid"></div></div>
+        <div class="card"><div class="label">Win streak</div><div id="home-streak" class="mid"></div></div>
+      </div>
+      <!-- The streak gift: what the next level starts with. Hidden when there is none. -->
+      <div id="home-gift" class="card gift" hidden>
+        <div id="home-gift-label" class="label">Standing Ovation: starts with</div>
+        <div id="home-gift-icons" class="gift-icons"></div>
+        <div id="home-gift-super" class="gift-super" hidden>Super Magic Ball active</div>
+      </div>
+      <button id="home-play" class="btn primary tall">Play</button>
+      <p id="home-reminder" class="note" hidden></p>
+    </div>
+    <footer class="home-bottom">
+      <button id="home-settings" class="btn quiet">Settings</button>
+    </footer>
+  </section>
+
+  <!-- LEVEL -->
+  <section id="screen-level" class="screen" hidden>
+    <header class="hud">
+      <div class="hud-row">
+        <div>
+          <div id="hud-tier" class="label"></div>
+          <div id="hud-level" class="mid"></div>
+        </div>
+        <div class="moves">
+          <div class="label">Moves</div>
+          <div id="hud-moves" class="big"></div>
+        </div>
+      </div>
+      <div id="hud-targets" class="targets" aria-label="Targets"></div>
+    </header>
+    <div id="board-box" class="board-box">
+      <canvas id="board"></canvas>
+    </div>
+    <footer class="level-bottom">
+      <button id="level-quit" class="btn quiet">Quit</button>
+    </footer>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="screen-results" class="screen" hidden>
+    <div class="results-mid">
+      <div id="results-sub" class="label"></div>
+      <h2 id="results-title" class="title"></h2>
+      <div id="results-lines" class="card lines"></div>
+    </div>
+    <footer class="stack">
+      <button id="results-next" class="btn primary tall"></button>
+      <button id="results-home" class="btn quiet">Home</button>
+    </footer>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="screen-settings" class="screen" hidden>
+    <header class="settings-top">
+      <button id="settings-back" class="btn quiet">Back</button>
+      <h2 class="title small">Settings</h2>
+    </header>
+    <div class="settings-mid">
+      <div class="card">
+        <div class="label">Animation speed</div>
+        <div class="segmented">
+          <button id="speed-normal" class="btn seg">Normal</button>
+          <button id="speed-fast" class="btn seg">Fast</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label">Your save</div>
+        <p id="settings-export-note" class="note"></p>
+        <div class="stack">
+          <button id="settings-export" class="btn">Export save</button>
+          <button id="settings-import" class="btn">Import save</button>
+        </div>
+        <input id="settings-file" type="file" accept=".json,application/json,text/plain" hidden>
+      </div>
+      <div id="settings-recovered" class="card warn" hidden>
+        <div class="label">Old save could not be read</div>
+        <p class="note">The game started fresh, but the old data was kept. Download it so it is not lost.</p>
+        <button id="settings-recovered-btn" class="btn">Download old data</button>
+      </div>
+      <p id="settings-msg" class="note" role="status"></p>
+    </div>
+  </section>
+
+  <!-- A yes/no question shown over the current screen. -->
+  <div id="confirm" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true">
+      <p id="confirm-text"></p>
+      <div class="pair">
+        <button id="confirm-no" class="btn"></button>
+        <button id="confirm-yes" class="btn danger"></button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="ui/main.js"></script>
+</body>
+</html>
