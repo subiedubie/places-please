@@ -25,7 +25,11 @@ test('defaults', () => {
     current: null,
     stats: { played: 0, won: 0 },
     lastExport: null,
-    settings: { speed: 'normal' },
+    settings: { speed: 'normal', rivals: 'even' },
+    events: { seed: 0, instances: {}, replaced: {}, gifts: {}, failedLevel: 0 },
+    rewards: { nextId: 1, items: [], active: [] },
+    album: { month: '', seed: 0, opened: 0, owned: {}, setsPaid: [], grandPaid: false },
+    inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
   });
 });
 
@@ -57,7 +61,7 @@ test('a partly filled nested object is completed', () => {
   st.setItem(KEY, '{"version":1,"stats":{"played":7},"settings":{}}');
   const { save } = loadSave(st);
   assert.deepEqual(save.stats, { played: 7, won: 0 });
-  assert.deepEqual(save.settings, { speed: 'normal' });
+  assert.deepEqual(save.settings, { speed: 'normal', rivals: 'even' });
 });
 
 test('a newer version is unreadable: defaults, text kept', () => {

@@ -110,7 +110,8 @@ export function createScreens(theme) {
   let targetCounts = []; // the number element of each chip
 
   function hud(game) {
-    $('hud-tier').textContent = tierName(game.level.tier);
+    // A bonus level (every 10th) shows its own name instead of the tier.
+    $('hud-tier').textContent = game.level.bonus && theme.bonusName ? theme.bonusName : tierName(game.level.tier);
     $('hud-level').textContent = 'Level ' + num(game.level.n);
     $('hud-moves').textContent = String(game.movesLeft);
 

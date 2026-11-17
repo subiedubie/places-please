@@ -31,3 +31,50 @@ export const OBSTACLES = {
 // The one obstacle that moves: it falls like a piece and is collected when it
 // reaches the bottom of its column (like the Frog).
 export const DROPPER = { id: 'sandbag', name: 'Sandbag' };
+
+// ---- Batch 2 (docs/OBSTACLES2.md) -------------------------------------------
+//
+// The floor layer: something lying UNDER a cell. It is removed when whatever
+// stands on that cell is cleared.
+export const FLOORS = {
+  confetti: { name: 'Confetti' }, // like Grass
+  petals:   { name: 'Petals' },   // like Leaves; spread by a bouquet
+};
+
+// Same style as OBSTACLES above, with a few more settings:
+//   size       [width, height] in cells (a truss takes its width from the level)
+//   leaves     also: 'confetti' / 'petals' (floor is laid when it breaks),
+//              'blast' (it goes off like a Grenade), 'power' (EVERY cell it
+//              covered becomes a random power-up)
+//   generator  true = never breaks; every `every`-th match hit gives one `product`
+//   product    what a hit hands the player (counted by a target of that name)
+//   colorList  how many colors it starts with; each must be matched next to it
+//   toggles    true = opens and closes after every move; only hit while open
+//   curtain    true = takes no hits; opens when enough of its color is cleared
+const M5 = ['match', 'match', 'match', 'match', 'match'];
+export const OBSTACLES2 = {
+  planter:     { name: 'Planter',        size: [2, 2], hits: M5, leaves: 'confetti' },            // like the Bush
+  bouquet:     { name: 'Bouquet',        size: [1, 1], hits: ['any', 'any'], leaves: 'petals' },  // like the Flowerpot
+  tophat:      { name: 'Top Hat',        size: [1, 1], hits: [], generator: true, every: 3, product: 'dove' },    // like the Magic Hat
+  popper:      { name: 'Popcorn Cart',   size: [1, 1], hits: [], generator: true, every: 3, product: 'popcorn' }, // like the Cauldron
+  candyjar:    { name: 'Candy Jar',      size: [1, 1], hits: ['any', 'any', 'any'], product: 'candy' },           // like the Jar
+  dovecote:    { name: 'Dovecote',       size: [2, 2], hits: M5 },                                // like the Birdhouse
+  footlights:  { name: 'Footlights',     size: [2, 2], hits: [], colorList: 4 },                  // like the Light Bulb
+  fireworks:   { name: 'Fireworks',      size: [2, 1], hits: [], colorList: 3, leaves: 'blast' }, // like the Dynamite Box
+  truss:       { name: 'Lighting Truss', size: [3, 1], hits: ['power', 'power'] },                // like the Metal Tube
+  ticketbooth: { name: 'Ticket Booth',   size: [3, 1], hits: ['power', 'match', 'match', 'match'], leaves: 'power' }, // like the Slot Machine
+  makeupcase:  { name: 'Makeup Case',    size: [1, 1], hits: ['match'], toggles: true },          // like the Bow Tie box
+  curtain:     { name: 'Curtain',        size: [1, 1], hits: [], curtain: true },                 // like the Curtain
+};
+
+// The batch-2 kinds the rules fully support. Levels may only use these.
+// ('confetti' is the floor kind levels may lay; 'petals' only appears when a
+// bouquet breaks, or when a hand-made level lists it in `floor`.)
+export const BATCH2_READY = [
+  'confetti', 'bouquet',                              // 1 floor + bouquet
+  'tophat', 'popper', 'candyjar',                     // 2 generators + candy jar
+  'planter', 'dovecote', 'truss', 'ticketbooth',      // 3 big blocks
+  'footlights', 'fireworks',                          // 4 color-list blocks
+  'makeupcase',                                       // 5 makeup case
+  'curtain',                                          // 6 curtain
+];

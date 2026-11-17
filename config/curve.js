@@ -174,6 +174,26 @@ export const CURVE = {
       sandbag: 56,
     },
 
+    // The same for the second batch of obstacles (docs/OBSTACLES2.md).
+    // A kind listed here is only used once the game engine says it supports
+    // it (BATCH2_READY in config/obstacles.js); until then the generator
+    // behaves as if the line were not here.
+    intro2: {
+      confetti: 62,
+      bouquet: 68,
+      candyjar: 74,
+      tophat: 82,
+      popper: 88,
+      planter: 94,
+      dovecote: 102,
+      truss: 108,
+      ticketbooth: 114,
+      footlights: 122,
+      fireworks: 128,
+      makeupcase: 134,
+      curtain: 142,
+    },
+
     // Which levels have obstacles at all.
     fromLevel: 4, // levels before this one never have obstacles
     everyNth: 1, // 1 = every level from `fromLevel` on, 2 = every second level, ...
@@ -193,7 +213,8 @@ export const CURVE = {
     maxSealedShare: 0.25, // at most this share of the cells may be cut off from falling pieces at the start
 
     // Obstacles that need a power-up to break. They are rationed.
-    powerOnlyKinds: ['cashbox', 'flat', 'strongbox', 'padlock'],
+    // (truss and ticketbooth are from batch 2; every cell they cover counts.)
+    powerOnlyKinds: ['cashbox', 'flat', 'strongbox', 'padlock', 'truss', 'ticketbooth'],
     powerOnlyMax: 8, // at most this many power-only cells on one level, all kinds together
     maxPerKind: { flat: 5 }, // a tighter limit for single kinds
 
@@ -223,7 +244,64 @@ export const CURVE = {
       perMatchHit: 0.6, // a hit that a normal match can give
       perPowerHit: 1.5, // a hit that only a power-up can give
       perSandbag: 2,
+      // Batch 2 (placeholders too):
+      perFloorCell: 0.3, // each confetti floor cell
+      perProduct: 2, // each dove or popcorn the level asks for
+      perBigHit: 0.8, // each match hit a planter or dovecote needs
+      perListColor: 1.5, // each color on a footlights or fireworks block
+      perMakeupCase: 1.5, // each makeup case
+      perCurtainPiece: 0.5, // each piece a curtain needs before it opens
       cap: 60, // the most moves any level gets
+    },
+
+    // ---- Batch 2 placement (docs/OBSTACLES2.md) ---------------------------
+    batch2: {
+      // How many cells wide and tall each big block is: [width, height].
+      // Must agree with config/obstacles.js (if that file gives a size for
+      // a kind, the generator uses that one). A truss is 1 tall and as wide
+      // as `truss` below says.
+      sizes: {
+        planter: [2, 2],
+        dovecote: [2, 2],
+        footlights: [2, 2],
+        fireworks: [2, 1],
+        ticketbooth: [3, 1],
+      },
+      // How many of each kind go on a level: [fewest, most].
+      // (Kinds not listed here have their own block below.)
+      counts: {
+        bouquet: [3, 6],
+        candyjar: [3, 6],
+        makeupcase: [4, 8],
+        planter: [1, 3],
+        dovecote: [1, 3],
+        footlights: [1, 2],
+        fireworks: [2, 4],
+        truss: [1, 2],
+        ticketbooth: [1, 2],
+      },
+      // Confetti floor: how many cells it covers. `max` is one value per tier.
+      confetti: { min: 8, max: [14, 16, 18, 20] },
+      // Top hats and popcorn carts (they never break, they hand out doves
+      // and popcorn). `needPerPair` = how many products the level asks for
+      // per two generators; the total never goes above `needCap`.
+      generators: { min: 2, max: 6, needPerPair: 6, needCap: 24 },
+      bigHits: { planter: 5, dovecote: 5 }, // match hits each one takes (for the move allowance)
+      candyPerJar: 3, // candies one jar gives (one per hit)
+      confettiPerPlanter: 4, // confetti cells a planter leaves when it breaks
+      // How many colors a color-list block starts with (never more than the
+      // level has).
+      listColors: { footlights: 4, fireworks: 3 },
+      truss: { minWidth: 3, maxWidth: 5 }, // cells wide
+      // Curtains: a rectangle standing on the bottom row.
+      curtain: {
+        heights: [2, 3], // rows tall: one of these is picked
+        sideMargin: 1, // columns left open at each side
+        maxColors: 2, // one color, or the left half one color and the right half another
+        needMin: 20, // pieces of its color to clear before a curtain opens: between
+        needMax: 30, //   needMin and needMax, picked per color
+        insideChance: 0.3, // chance (0 to 1) that a curtain cell hides an ordinary piece
+      },
     },
 
     // Placement patterns. Each one lists board cells as [column, row], in

@@ -19,7 +19,19 @@ export function defaultSave() {
     current: null, // the level in progress (a serialized Game), or null
     stats: { played: 0, won: 0 },
     lastExport: null, // time of the last export (milliseconds), or null
-    settings: { speed: 'normal' }, // animation speed: 'normal' or 'fast'
+    // speed: animation speed, 'normal' or 'fast'.
+    // rivals: how fast computer rivals play, 'relaxed' | 'even' | 'tough'
+    // (the pace tables are in config/rivals.js).
+    settings: { speed: 'normal', rivals: 'even' },
+    // Side games (meta/events/index.js explains each field).
+    events: { seed: 0, instances: {}, replaced: {}, gifts: {}, failedLevel: 0 },
+    // The rewards tray and the timed boosts running (meta/rewards.js).
+    rewards: { nextId: 1, items: [], active: [] },
+    // The monthly card album (meta/album.js).
+    album: { month: '', seed: 0, opened: 0, owned: {}, setsPaid: [], grandPaid: false },
+    // Boosters owned. spot/show/prism are chosen before a level; the other
+    // four are used during one. Prices are in config/economy.js.
+    inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
   };
 }
 

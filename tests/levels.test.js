@@ -1,9 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { generateLevel, introLevels } from '../levels/generate.js';
+import { createHash } from 'node:crypto';
+import { generateLevel as generate, introLevels, blockSize } from '../levels/generate.js';
 import { CURVE } from '../config/curve.js';
 import { OBSTACLES, DROPPER } from '../config/obstacles.js';
+
+// The batch-1 tests below run with no batch-2 kind switched on, whatever the
+// engine says it supports today. The batch-2 tests are at the end of the file.
+const generateLevel = (n) => generate(n, CURVE, { ready: [] });
 
 // engine/game.js is written separately; tests that need it skip until it exists.
 const gameUrl = new URL('../engine/game.js', import.meta.url);
@@ -125,7 +130,7 @@ test('levels 1-3 and levels ending in 0 have no obstacles; the others do', () =>
 });
 
 test('an introduction level contains exactly the introduced kind', () => {
-  const intro = introLevels();
+  const intro = introLevels(CURVE, []);
   // Config levels that end in 0 move to the next level; the rest stay put.
   for (const [kind, n] of Object.entries(O.intro)) {
     assert.equal(intro[kind], n % 10 === 0 ? n + 1 : n, `${kind} intro level`);
@@ -178,7 +183,7 @@ test('block kinds, paint colors, padlock contents and power-only limits', () => 
         if (i.t === 'block') {
           assert.ok(i.kind in OBSTACLES && i.kind !== 'padlock', `level ${n} padlock holds ${i.kind}`);
           assert.equal(i.hp, OBSTACLES[i.kind].hits.length, `level ${n} padlock contents hp`);
-          assert.ok(introLevels()[i.kind] < n, `level ${n} padlock holds a kind not introduced yet`);
+          assert.ok(introLevels(CURVE, [])[i.kind] < n, `level ${n} padlock holds a kind not introduced yet`);
         }
       } else {
         assert.equal(b.inside, undefined, `level ${n} inside on ${b.kind}`);
@@ -283,8 +288,238 @@ test('obstacle targets ask for everything on the board; moves follow the allowan
 test('newGame accepts every level 1..500', { skip: noGame }, async () => {
   const { newGame } = await import('../engine/game.js');
   for (let n = 1; n <= 500; n++) {
-    const game = newGame(generateLevel(n), 1);
+    const game = newGame(generate(n), 1);
     assert.equal(game.status, 'playing', `level ${n}`);
-    assert.equal(game.movesLeft, generateLevel(n).moves, `level ${n}`);
+    assert.equal(game.movesLeft, generate(n).moves, `level ${n}`);
+  }
+});
+
+// ---- Obstacles, batch 2 (docs/OBSTACLES2.md) ---------------------------------
+// These tests switch every batch-2 kind on themselves, so they do not depend
+// on how far the engine is.
+
+const B2 = O.batch2;
+const ALL2 = Object.keys(O.intro2);
+const gen2 = (n) => generate(n, CURVE, { ready: ALL2 });
+const PRODUCT = { tophat: 'dove', popper: 'popcorn', candyjar: 'candy' };
+// Every cell a block covers, as 'x,y' strings.
+function cellsOf(b) {
+  const [w, h] = blockSize(b);
+  const out = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push(`${b.x + dx},${b.y + dy}`);
+  return out;
+}
+
+test('batch 2 off: levels 1..400 are exactly what the generator made before batch 2', () => {
+  // Recorded from the generator before batch 2 was added (16 Nov. 2026).
+  const lines = [];
+  for (let n = 1; n <= 400; n++) {
+    const L = generateLevel(n);
+    lines.push(JSON.stringify([L.blocks, L.drops, L.targets, L.moves]));
+    assert.deepEqual(L.floor, [], `level ${n} floor`);
+  }
+  assert.equal(
+    lines[56],
+    '[[{"x":1,"y":8,"kind":"crate"},{"x":2,"y":8,"kind":"crate"},{"x":3,"y":8,"kind":"crate"},{"x":4,"y":8,"kind":"crate"},{"x":5,"y":8,"kind":"crate"},{"x":6,"y":8,"kind":"crate"},{"x":2,"y":7,"kind":"crate"},{"x":3,"y":7,"kind":"crate"},{"x":4,"y":7,"kind":"crate"},{"x":1,"y":7,"kind":"dryice"},{"x":5,"y":7,"kind":"dryice"},{"x":2,"y":6,"kind":"dryice"},{"x":4,"y":6,"kind":"dryice"},{"x":6,"y":6,"kind":"dryice"},{"x":1,"y":5,"kind":"dryice"}],[],[{"block":"crate","need":9},{"block":"dryice","need":6}],39]',
+    'level 57',
+  );
+  assert.equal(
+    lines[122],
+    '[[],[{"x":2,"y":2},{"x":3,"y":3},{"x":4,"y":2},{"x":5,"y":3},{"x":6,"y":3}],[{"block":"sandbag","need":5}],40]',
+    'level 123',
+  );
+  assert.equal(
+    createHash('sha256').update(lines.join('\n')).digest('hex'),
+    'cee89089fa2ee4356bb0a099e7226ee17faf1499641f9e13344cbf35597eb8e6',
+  );
+});
+
+test('batch 2: a kind that is not ready is never used; levels before the first intro do not change', () => {
+  const some = ['confetti', 'tophat'];
+  for (let n = 1; n <= 400; n++) {
+    const L = generate(n, CURVE, { ready: some });
+    for (const b of L.blocks) assert.ok(b.kind in OBSTACLES || some.includes(b.kind), `level ${n} uses ${b.kind}`);
+    if (n < O.intro2.confetti) assert.deepEqual(gen2(n), generateLevel(n), `level ${n}`);
+  }
+});
+
+test('batch 2: generation is a pure function of n (1..400), all kinds ready', () => {
+  for (let n = 1; n <= 400; n++) {
+    assert.equal(JSON.stringify(gen2(n)), JSON.stringify(gen2(n)), `level ${n}`);
+  }
+});
+
+test('batch 2: an introduction level contains the introduced kind, alone', () => {
+  const intro = introLevels(CURVE, ALL2);
+  for (const kind of ALL2) {
+    assert.equal(intro[kind], O.intro2[kind], `${kind} intro level`);
+    const L = gen2(intro[kind]);
+    if (kind === 'confetti') {
+      assert.ok(L.floor.length > 0 && L.floor.every((f) => f.kind === 'confetti'), 'confetti intro has floor');
+      assert.deepEqual(L.blocks, []);
+    } else {
+      assert.ok(L.blocks.length > 0 && L.blocks.every((b) => b.kind === kind), `level ${intro[kind]} introduces ${kind}`);
+      assert.deepEqual(L.floor, []);
+    }
+    assert.deepEqual(L.drops, []);
+    // No kind shows up before its introduction.
+    for (let m = 1; m < intro[kind]; m++) {
+      const E = gen2(m);
+      assert.ok(!E.blocks.some((b) => b.kind === kind), `${kind} on level ${m}`);
+      if (kind === 'confetti') assert.deepEqual(E.floor, [], `floor on level ${m}`);
+    }
+  }
+});
+
+test('batch 2: blocks fit on the board, never overlap, keep 40% ordinary; power-only limit counts cells', () => {
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    const holes = new Set(L.holes.map(key));
+    const used = new Set();
+    let powerOnly = 0;
+    for (const b of L.blocks) {
+      const [w, h] = blockSize(b);
+      if (b.kind === 'truss') assert.ok(Number.isInteger(b.w) && b.w >= 3 && b.w <= L.cols, `level ${n} truss width`);
+      else assert.equal(b.w, undefined, `level ${n} w on ${b.kind}`);
+      assert.ok(b.y >= 2, `level ${n} ${b.kind} in the top two rows`);
+      assert.ok(b.x >= 0 && b.x + w <= L.cols && b.y + h <= L.rows, `level ${n} ${b.kind} off the board`);
+      for (const c of cellsOf(b)) {
+        assert.ok(!holes.has(c), `level ${n} ${b.kind} on a hole`);
+        assert.ok(!used.has(c), `level ${n} two blocks on ${c}`);
+        used.add(c);
+      }
+      if (isPowerOnly(b.kind)) powerOnly += w * h;
+    }
+    for (const d of L.drops) {
+      assert.ok(!used.has(key(d)), `level ${n} sandbag on a block`);
+      used.add(key(d));
+    }
+    assert.ok(isPowerOnly('truss') && isPowerOnly('ticketbooth'));
+    assert.ok(powerOnly <= O.powerOnlyMax, `level ${n} has ${powerOnly} power-only cells`);
+    const playable = L.cols * L.rows - L.holes.length;
+    assert.ok(playable - used.size >= O.minOrdinaryShare * playable, `level ${n} under 40% ordinary cells`);
+  }
+});
+
+test('batch 2: nothing a match cannot open cuts a cell off; sealed share holds', () => {
+  const hard = (kind) => isPowerOnly(kind) || ['tophat', 'popper', 'curtain'].includes(kind);
+  const unfed = (L, walls) => {
+    const holes = new Set(L.holes.map(key));
+    const fed = new Set();
+    let count = 0;
+    for (let y = 0; y < L.rows; y++) {
+      for (let x = 0; x < L.cols; x++) {
+        if (holes.has(`${x},${y}`) || walls.has(`${x},${y}`)) continue;
+        let above = y - 1;
+        while (above >= 0 && holes.has(`${x},${above}`)) above--;
+        if (above < 0 || fed.has(`${x},${above}`) || fed.has(`${x - 1},${y - 1}`) || fed.has(`${x + 1},${y - 1}`)) fed.add(`${x},${y}`);
+        else count++;
+      }
+    }
+    return count;
+  };
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    assert.equal(unfed(L, new Set(L.blocks.filter((b) => hard(b.kind)).flatMap(cellsOf))), 0, `level ${n} walled in`);
+    const playable = L.cols * L.rows - L.holes.length;
+    assert.ok(unfed(L, new Set(L.blocks.flatMap(cellsOf))) <= O.maxSealedShare * playable, `level ${n} sealed share`);
+  }
+});
+
+test('batch 2: floor cells are on playable cells with no block or sandbag on them', () => {
+  let seen = 0;
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    assert.ok(Array.isArray(L.floor), `level ${n} floor list`);
+    if (L.floor.length > 0) seen++;
+    const holes = new Set(L.holes.map(key));
+    const taken = new Set([...L.blocks.flatMap(cellsOf), ...L.drops.map(key)]);
+    const mine = new Set();
+    for (const f of L.floor) {
+      assert.equal(f.kind, 'confetti', `level ${n} floor kind`);
+      assert.ok(f.x >= 0 && f.x < L.cols && f.y >= 0 && f.y < L.rows && !holes.has(key(f)), `level ${n} floor off the board`);
+      assert.ok(!taken.has(key(f)), `level ${n} floor under a block`);
+      assert.ok(!mine.has(key(f)), `level ${n} repeated floor cell`);
+      mine.add(key(f));
+    }
+  }
+  assert.ok(seen > 5, 'too few confetti levels');
+});
+
+test('batch 2: footlights and fireworks colors, makeup cases, curtains', () => {
+  const seen = {};
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    const curtainNeed = {};
+    for (const b of L.blocks) {
+      seen[b.kind] = true;
+      if (b.kind === 'footlights' || b.kind === 'fireworks') {
+        assert.equal(b.colors.length, Math.min(B2.listColors[b.kind], L.colors), `level ${n} ${b.kind} color count`);
+        assert.equal(new Set(b.colors).size, b.colors.length, `level ${n} ${b.kind} repeated color`);
+        for (const c of b.colors) assert.ok(Number.isInteger(c) && c >= 0 && c < L.colors, `level ${n} ${b.kind} color`);
+      } else {
+        assert.equal(b.colors, undefined, `level ${n} colors on ${b.kind}`);
+      }
+      if (b.kind === 'makeupcase') assert.equal(b.open, (b.x + b.y) % 2 === 0, `level ${n} makeup case`);
+      else assert.equal(b.open, undefined, `level ${n} open on ${b.kind}`);
+      if (b.kind === 'curtain') {
+        assert.ok(Number.isInteger(b.color) && b.color >= 0 && b.color < L.colors, `level ${n} curtain color`);
+        assert.ok(b.need >= B2.curtain.needMin && b.need <= B2.curtain.needMax, `level ${n} curtain need`);
+        assert.ok(b.y >= L.rows / 2, `level ${n} curtain above the lower half`);
+        // Every curtain cell of one color carries the same need.
+        assert.equal(curtainNeed[b.color] ?? b.need, b.need, `level ${n} curtain needs differ`);
+        curtainNeed[b.color] = b.need;
+        if (b.inside !== undefined) {
+          assert.equal(b.inside.t, 'piece');
+          assert.ok(b.inside.color >= 0 && b.inside.color < L.colors, `level ${n} curtain inside`);
+        }
+      }
+    }
+    assert.ok(Object.keys(curtainNeed).length <= B2.curtain.maxColors, `level ${n} curtain colors`);
+  }
+  for (const kind of ALL2) if (kind !== 'confetti') assert.ok(seen[kind], `${kind} never placed`);
+});
+
+test('batch 2: generators come 2-6 at a time, each with two ordinary neighbours', () => {
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    const holes = new Set(L.holes.map(key));
+    const taken = new Set([...L.blocks.flatMap(cellsOf), ...L.drops.map(key)]);
+    for (const kind of ['tophat', 'popper']) {
+      const mine = L.blocks.filter((b) => b.kind === kind);
+      if (mine.length === 0) continue;
+      assert.ok(mine.length >= B2.generators.min && mine.length <= B2.generators.max, `level ${n} has ${mine.length} ${kind}`);
+      for (const g of mine) {
+        const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => {
+          const x = g.x + dx;
+          const y = g.y + dy;
+          return x >= 0 && x < L.cols && y >= 0 && y < L.rows && !holes.has(`${x},${y}`) && !taken.has(`${x},${y}`);
+        });
+        assert.ok(open.length >= 2, `level ${n} ${kind} at ${key(g)} has ${open.length} ordinary neighbours`);
+      }
+    }
+  }
+});
+
+test('batch 2: target needs match the board; at most 3 targets; moves stay in range', () => {
+  for (let n = 1; n <= 400; n++) {
+    const L = gen2(n);
+    assert.ok(L.targets.length >= 1 && L.targets.length <= 3, `level ${n} has ${L.targets.length} targets`);
+    const counts = kindCounts(L);
+    const expected = {};
+    for (const [kind, count] of Object.entries(counts)) {
+      if (kind === 'tophat' || kind === 'popper') {
+        expected[PRODUCT[kind]] = Math.min(B2.generators.needCap, Math.round((B2.generators.needPerPair * count) / 2));
+      } else if (kind === 'candyjar') expected.candy = 3 * count;
+      else expected[kind] = count;
+    }
+    const confetti = L.floor.length + 4 * (counts.planter || 0);
+    if (confetti > 0) expected.confetti = confetti;
+    const blockTargets = L.targets.filter((t) => t.block !== undefined);
+    assert.deepEqual(Object.fromEntries(blockTargets.map((t) => [t.block, t.need])), expected, `level ${n} targets`);
+    assert.equal(new Set(blockTargets.map((t) => t.block)).size, blockTargets.length, `level ${n} repeated target`);
+    for (const t of L.targets) assert.ok(Number.isInteger(t.need) && t.need > 0, `level ${n} need`);
+    if (blockTargets.length > 0) assert.ok(L.targets.length - blockTargets.length <= 1, `level ${n} color targets`);
+    assert.ok(Number.isInteger(L.moves) && L.moves >= CURVE.baseMoves[L.tier] && L.moves <= O.extraMoves.cap, `level ${n} moves ${L.moves}`);
   }
 });

@@ -4,6 +4,10 @@ import { generateLevel } from '../levels/generate.js';
 import { newGame, act, serialize, deserialize } from '../engine/game.js';
 import { settleLevel } from './economy.js';
 import { ECONOMY } from '../config/economy.js';
+import { attachShop } from './shop.js'; // boosters, extra moves, bonus-level pay
+import { createEvents } from './events/index.js'; // the side games
+import { createRewards } from './rewards.js'; // the rewards tray
+import { createAlbum } from './album.js'; // the card album
 
 // Which free power-ups the next level starts with, given the current win
 // streak. The steps are in config/economy.js (streakGift).
@@ -62,7 +66,11 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
       }
       // Streak gift: free power-ups on the board for wins in a row.
       if (!game) game = newGame(level, now(), undefined, {
-        startPowers: streakGift(session.save.streak),
+        // ...plus the pre-level boosters chosen on Home (each spends one).
+        // ...plus the power-ups of any timed boost running now (rewards tray).
+        startPowers: streakGift(session.save.streak)
+          .concat(session.takePreBoosters())
+          .concat(rewards.startPowers(now())),
         // Super Magic Ball: active while the win streak is at least this long.
         superPrism: session.save.streak >= (ECONOMY.superPrismStreak || Infinity),
       });
@@ -77,6 +85,7 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     doAction(action) {
       if (!session.game) return [{ type: 'invalid' }];
       const events = act(session.game, action);
+      session.bonusNeverLost(events); // a bonus level out of moves counts as won
       const invalid = events.length > 0 && events[0].type === 'invalid';
       if (!invalid) {
         // Saved after every move, so closing the app loses nothing.
@@ -95,12 +104,25 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     finish() {
       const game = session.game;
       if (!game) return null;
-      const settlement = settleLevel(game, names);
+      // (addBonusPay adds the per-piece coins of a bonus level; see meta/shop.js)
+      const settlement = session.addBonusPay(game, settleLevel(game, names));
+      const firstAttempt = events.firstAttempt(game.level.n);
       session.save = applyResult(session.save, game, settlement);
+      // Tell every running side game about this level. eventLines says what
+      // it added to each; newRewards are the prizes just put in the tray.
+      const { eventLines, newRewards } = events.onLevel({
+        won: game.status === 'won',
+        level: game.level.n,
+        tier: game.level.tier,
+        tally: game.tally,
+        firstAttempt,
+        movesLeft: game.movesLeft,
+        now: now(),
+      });
       write();
       session.game = null;
       session.level = null;
-      return { status: game.status, settlement, save: session.save };
+      return { status: game.status, settlement, save: session.save, eventLines, newRewards };
     },
 
     // Give up: the same as finish, but always a loss.
@@ -135,6 +157,35 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
   function write() {
     session.lastWriteOk = writeSave(storage, session.save);
   }
+
+  // Side games, rewards tray and card album (docs/EVENTS.md). They read the
+  // save through a function, so they follow an imported or replaced save.
+  // Each call below saves afterwards, because looking at the list can itself
+  // start or end an event when the clock has moved on.
+  const getSave = () => session.save;
+  const album = createAlbum(getSave, {
+    add: (...args) => rewards.add(...args),
+  });
+  const rewards = createRewards(getSave, { openPack: (t) => album.openPack(t) });
+  const events = createEvents(getSave, rewards);
+  const saved = (value) => {
+    write();
+    return value;
+  };
+  session.events = {
+    list: (t) => saved(events.list(t)),
+    detail: (id, t) => saved(events.detail(id, t)),
+    start: (id, t) => saved(events.start(id, t)),
+  };
+  session.rewards = {
+    tray: (t) => saved(rewards.tray(t)),
+    claim: (id, t) => saved(rewards.claim(id, t)),
+    active: (t) => saved(rewards.active(t)),
+  };
+  session.album = (t) => saved(album.view(t));
+
+  // Adds useBooster, buyBooster, buyMoves, setPreBoosters (meta/shop.js).
+  attachShop(session, write);
 
   return session;
 }

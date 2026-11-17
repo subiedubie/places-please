@@ -14,6 +14,8 @@
   <meta name="apple-mobile-web-app-title" content="Places, Please">
   <meta name="theme-color" content="#ffffff">
   <link rel="stylesheet" href="ui/style.css">
+  <link rel="stylesheet" href="ui/events.css">
+  <link rel="stylesheet" href="ui/help.css">
 </head>
 <body>
 <div id="app">
@@ -38,11 +40,17 @@
         <div id="home-gift-icons" class="gift-icons"></div>
         <div id="home-gift-super" class="gift-super" hidden>Super Magic Ball active</div>
       </div>
+      <!-- Pre-level boosters to switch on for the next level (filled by ui/boosters.js). -->
+      <div id="home-boosters" class="card gift" hidden></div>
       <button id="home-play" class="btn primary tall">Play</button>
+      <!-- Side games, the Rewards and album buttons, running boosts (filled by ui/events.js). -->
+      <div id="home-events"></div>
       <p id="home-reminder" class="note" hidden></p>
     </div>
     <footer class="home-bottom">
       <button id="home-settings" class="btn quiet">Settings</button>
+      <!-- Opens the full rules sheet (ui/help.js). -->
+      <button id="home-help" class="btn quiet">How to play</button>
     </footer>
   </section>
 
@@ -54,18 +62,26 @@
           <div id="hud-tier" class="label"></div>
           <div id="hud-level" class="mid"></div>
         </div>
+        <!-- "?": the rules for the obstacles on this board (ui/help.js). -->
+        <button id="level-help" class="btn quiet help-q" aria-label="Rules for this board">?</button>
         <div class="moves">
           <div class="label">Moves</div>
           <div id="hud-moves" class="big"></div>
         </div>
       </div>
       <div id="hud-targets" class="targets" aria-label="Targets"></div>
+      <!-- A timed boost that is running, with its time left (filled by ui/events.js). -->
+      <div id="level-boost" hidden></div>
     </header>
     <div id="board-box" class="board-box">
       <canvas id="board"></canvas>
     </div>
+    <!-- One line of help for the booster bar (filled by ui/boosters.js). -->
+    <p id="booster-hint" class="note booster-hint" role="status"></p>
     <footer class="level-bottom">
       <button id="level-quit" class="btn quiet">Quit</button>
+      <!-- The four in-level boosters (filled by ui/boosters.js). -->
+      <div id="booster-bar" class="booster-bar"></div>
     </footer>
   </section>
 
@@ -75,6 +91,8 @@
       <div id="results-sub" class="label"></div>
       <h2 id="results-title" class="title"></h2>
       <div id="results-lines" class="card lines"></div>
+      <!-- What the level added to each side game, and new rewards (filled by ui/events.js). -->
+      <div id="results-events" hidden></div>
     </div>
     <footer class="stack">
       <button id="results-next" class="btn primary tall"></button>
@@ -87,8 +105,12 @@
     <header class="settings-top">
       <button id="settings-back" class="btn quiet">Back</button>
       <h2 class="title small">Settings</h2>
+      <!-- Opens the full rules sheet (ui/help.js). -->
+      <button id="settings-help" class="btn quiet">How to play</button>
     </header>
     <div class="settings-mid">
+      <!-- Rival toughness: Relaxed / Even / Tough (filled by ui/events.js). -->
+      <div id="settings-rivals" class="card"></div>
       <div class="card">
         <div class="label">Animation speed</div>
         <div class="segmented">
@@ -113,6 +135,18 @@
       <p id="settings-msg" class="note" role="status"></p>
     </div>
   </section>
+
+  <!-- Out of moves: buy more or give up (ui/boosters.js). -->
+  <div id="out-of-moves" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true">
+      <p><strong>Out of moves</strong></p>
+      <p id="oom-note" class="note"></p>
+      <div class="stack">
+        <button id="oom-buy" class="btn primary tall"></button>
+        <button id="oom-quit" class="btn quiet">Give up</button>
+      </div>
+    </div>
+  </div>
 
   <!-- A yes/no question shown over the current screen. -->
   <div id="confirm" class="overlay" hidden>

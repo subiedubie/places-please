@@ -6,9 +6,10 @@
 
 import {
   createBoard, get, set, piece, cloneBoard, adjacent,
-  isPiece, isPower, isBlock, EMPTY, POWER_KINDS, block, drop,
+  isPiece, isPower, isBlock, isPart, EMPTY, POWER_KINDS, block, drop,
+  placeBlock, setFloor, floorAt, liftFloor, obstacleDef, anchorOf,
 } from './board.js';
-import { DROPPER } from '../config/obstacles.js';
+import { OBSTACLES2 } from '../config/obstacles.js';
 import { makeRng } from './rng.js';
 import { findGroups } from './matches.js';
 import { DROP_RULES } from './drops.js';
@@ -46,19 +47,45 @@ function fillStart(board, colors, rng) {
 // Both lists are optional. Entries that point at a hole or off the board are
 // ignored. A padlock with no `inside` given locks up the piece that the fill
 // put in that cell.
-function placeObstacles(board, level) {
+function placeObstacles(board, level, rng) {
   // `inside` may itself be a block; make sure it has its hit points.
-  const asCell = (c) => (c && c.t === 'block' && c.hp === undefined ? block(c.kind, { color: c.color, inside: asCell(c.inside) }) : c);
+  const asCell = (c) => (c && c.t === 'block' && c.hp === undefined ? block(c.kind, { ...c, inside: asCell(c.inside) }) : c);
   for (const b of level.blocks || []) {
     const there = get(board, b.x, b.y);
     if (there === null) continue; // a hole, or off the board
     let inside = asCell(b.inside);
     if (b.kind === 'padlock' && !inside && isPiece(there)) inside = there;
-    set(board, b.x, b.y, block(b.kind, { color: b.color, inside }));
+    const extra = { color: b.color, inside };
+    const def = OBSTACLES2[b.kind];
+    if (def) {
+      // Batch-2 extras: a truss's width, a color list, a curtain's count,
+      // whether a makeup case starts open.
+      extra.w = b.w;
+      extra.need = b.need;
+      extra.open = b.open;
+      extra.colors = b.colors;
+      if (def.colorList && !b.colors) {
+        // No colors given: draw them at random from the level's colors,
+        // all different while there are enough to go round.
+        let pool = [];
+        extra.colors = [];
+        for (let i = 0; i < def.colorList; i++) {
+          if (pool.length === 0) pool = Array.from({ length: level.colors }, (_, c) => c);
+          extra.colors.push(pool.splice(rng.int(pool.length), 1)[0]);
+        }
+      }
+    }
+    // placeBlock also lays the 'part' cells of a block bigger than one cell.
+    placeBlock(board, b.x, b.y, b.kind, extra);
   }
   for (const d of level.drops || []) {
     if (get(board, d.x, d.y) === null) continue;
     set(board, d.x, d.y, drop());
+  }
+  // The floor layer: level.floor = [{ x, y, kind }] ('confetti' or 'petals').
+  for (const f of level.floor || []) {
+    if (get(board, f.x, f.y) === null) continue;
+    setFloor(board, f.x, f.y, f.kind);
   }
 }
 
@@ -70,7 +97,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
   const setupRng = base.fork('setup');
   fillStart(board, level.colors, setupRng);
   // Obstacles and droppers replace some of the pieces just placed.
-  placeObstacles(board, level);
+  placeObstacles(board, level, setupRng);
   // Safety net: the fill above avoids matches, but make sure a move exists.
   if (findGroups(board).length > 0 || !hasLegalMove(board)) reshuffle(board, setupRng);
 
@@ -128,20 +155,46 @@ function dropContext(game) {
   };
 }
 
-// What a Ninja Star (and a tapped Magic Ball) should go for: a piece of a
-// color the level still needs, a block of a kind the level still needs, or a
-// padlock that is holding such a block.
+// What a Ninja Star (and a tapped Magic Ball) should go for:
+//   - a piece of a color the level still needs;
+//   - a block of a kind the level still needs (a part of a big block counts as
+//     its block), or a padlock that is holding such a block;
+//   - any cell whose floor (confetti, petals) the level still needs;
+//   - a candy jar when the level still needs candy;
+//   - a piece right next to a generator (top hat, popcorn cart) whose product
+//     the level still needs. The generator itself is never aimed at: a power
+//     hit does nothing to it.
+// The (x, y) of the cell is optional; without it only the cell itself is judged.
 function stillNeeded(game) {
-  const open = (t) => t.have < t.need;
-  const needs = (cell) => {
-    if (isPiece(cell)) return game.targets.some((t) => t.color === cell.color && open(t));
-    if (isBlock(cell)) {
-      if (game.targets.some((t) => t.block === cell.kind && open(t))) return true;
-      return cell.kind === 'padlock' && isBlock(cell.inside) && needs(cell.inside);
+  const open = (id) => game.targets.some((t) => t.block === id && t.have < t.need);
+  const blockNeeded = (cell) => {
+    if (open(cell.kind)) return true;
+    const def = obstacleDef(cell.kind);
+    if (def.product && !def.generator && open(def.product)) return true;
+    return cell.kind === 'padlock' && isBlock(cell.inside) && blockNeeded(cell.inside);
+  };
+  return (cell, x, y) => {
+    const board = game.board;
+    const placed = x !== undefined && y !== undefined;
+    if (placed) {
+      const floor = floorAt(board, x, y);
+      if (floor !== null && open(floor)) return true;
     }
+    if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
+    if (isPiece(cell)) {
+      if (game.targets.some((t) => t.color === cell.color && t.have < t.need)) return true;
+      if (!placed) return false;
+      // Next to a generator whose product is needed?
+      return [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => {
+        const n = get(board, x + dx, y + dy);
+        if (!isBlock(n)) return false;
+        const def = obstacleDef(n.kind);
+        return !!def.generator && open(def.product);
+      });
+    }
+    if (isBlock(cell)) return blockNeeded(cell);
     return false;
   };
-  return (cell) => needs(cell);
 }
 
 // Add one to the target for breaking this kind of block (if the level has one).
@@ -171,14 +224,52 @@ function recordEvents(game, events) {
       // An obstacle took a hit; it only counts once it is destroyed.
       if (e.destroyed) countBlock(game, e.kind);
     } else if (e.type === 'collect') {
-      // A dropper reached the bottom.
-      countBlock(game, DROPPER.id);
+      // A dropper reached the bottom ('sandbag'), or a generator or candy jar
+      // handed something out ('dove', 'popcorn', 'candy').
+      countBlock(game, e.kind);
+    } else if (e.type === 'floor') {
+      // A bit of floor was removed ('confetti' or 'petals').
+      countBlock(game, e.kind);
     } else if (e.type === 'spawn-power') {
       bump(game.tally.made, e.kind);
     } else if (e.type === 'cascade') {
       game.tally.cascades++;
     }
   }
+}
+
+// Curtains: every curtain cell whose color has been cleared often enough
+// (game.tally.cleared[color] has reached the cell's `need`) opens. The cell
+// becomes what was behind it (`inside`) or empty. Returns the events.
+function openCurtains(game) {
+  const board = game.board;
+  const events = [];
+  for (let y = 0; y < board.rows; y++) {
+    for (let x = 0; x < board.cols; x++) {
+      const cell = get(board, x, y);
+      if (!isBlock(cell) || cell.kind !== 'curtain') continue;
+      if ((game.tally.cleared[cell.color] || 0) < cell.need) continue;
+      set(board, x, y, cell.inside ?? EMPTY);
+      events.push({ type: 'block', x, y, kind: 'curtain', hpLeft: 0, destroyed: true, by: 'count' });
+      const lifted = liftFloor(board, x, y);
+      if (lifted) events.push(lifted);
+    }
+  }
+  return events;
+}
+
+// Makeup cases: every one flips open/closed. Returns the cells that flipped.
+function flipMakeupCases(board) {
+  const cells = [];
+  for (let y = 0; y < board.rows; y++) {
+    for (let x = 0; x < board.cols; x++) {
+      const cell = get(board, x, y);
+      if (!isBlock(cell) || !obstacleDef(cell.kind).toggles) continue;
+      set(board, x, y, { ...cell, open: !cell.open }); // a fresh object, so old snapshots stay true
+      cells.push({ x, y, open: !cell.open });
+    }
+  }
+  return cells;
 }
 
 function swapCells(board, a, b) {
@@ -242,8 +333,26 @@ export function act(game, action) {
   }
 
   // Clear matches, let pieces fall, refill, and repeat until the board is still.
-  events.push(...settle(board, dropContext(game), origins));
+  events.push(...settle(board, { ...dropContext(game), needs: opts.needs }, origins));
   recordEvents(game, events);
+
+  // Curtains open once enough of their color has been cleared this level.
+  // What was behind them may fall or match, so the board settles again (and
+  // that may open more curtains).
+  for (;;) {
+    const opened = openCurtains(game);
+    if (opened.length === 0) break;
+    const more = [...opened, { type: 'frame', board: cloneBoard(board) }];
+    more.push(...settle(board, { ...dropContext(game), needs: opts.needs }, []));
+    recordEvents(game, more);
+    events.push(...more);
+  }
+
+  // Makeup cases flip open/closed after every move.
+  const flipped = flipMakeupCases(board);
+  if (flipped.length > 0) {
+    events.push({ type: 'toggle', cells: flipped }, { type: 'frame', board: cloneBoard(board) });
+  }
 
   game.movesLeft -= 1;
   game.moveCount += 1;
@@ -265,7 +374,13 @@ export function act(game, action) {
 export function serialize(game) {
   return {
     level: game.level,
-    board: { cols: game.board.cols, rows: game.board.rows, cells: game.board.cells },
+    board: {
+      cols: game.board.cols,
+      rows: game.board.rows,
+      cells: game.board.cells,
+      // The floor layer (an old game without one saves as all null).
+      floor: game.board.floor || new Array(game.board.cells.length).fill(null),
+    },
     movesLeft: game.movesLeft,
     targets: game.targets,
     status: game.status,
@@ -283,7 +398,8 @@ export function deserialize(data, dropRule = DROP_RULES.D1) {
   const cells = d.board.cells.map((c) => (c && c.t === 'empty' ? EMPTY : c));
   const game = {
     level: d.level,
-    board: { cols: d.board.cols, rows: d.board.rows, cells },
+    // An old save has no floor layer: that reads as no floor anywhere.
+    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null) },
     movesLeft: d.movesLeft,
     targets: d.targets,
     status: d.status,

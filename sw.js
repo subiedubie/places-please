@@ -4,18 +4,24 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v2';
+const CACHE = 'places-please-v5';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
 // FILES-START
 const FILES = [
   './',
+  './config/album.js',
+  './config/calendar.js',
   './config/curve.js',
   './config/economy.js',
+  './config/events.js',
+  './config/help.js',
   './config/obstacles.js',
+  './config/rivals.js',
   './config/theme.js',
   './engine/board.js',
+  './engine/boosters.js',
   './engine/drops.js',
   './engine/game.js',
   './engine/matches.js',
@@ -29,10 +35,33 @@ const FILES = [
   './index.html',
   './levels/generate.js',
   './manifest.webmanifest',
+  './meta/album.js',
   './meta/economy.js',
+  './meta/events/bracket.js',
+  './meta/events/calendar.js',
+  './meta/events/chest.js',
+  './meta/events/company.js',
+  './meta/events/dash.js',
+  './meta/events/index.js',
+  './meta/events/ladder.js',
+  './meta/events/missions.js',
+  './meta/events/quota.js',
+  './meta/events/race.js',
+  './meta/events/rivals.js',
+  './meta/events/season.js',
+  './meta/events/sprint.js',
+  './meta/events/streak.js',
+  './meta/events/util.js',
+  './meta/rewards.js',
   './meta/save.js',
   './meta/session.js',
+  './meta/shop.js',
   './ui/anim.js',
+  './ui/boosters.js',
+  './ui/events.css',
+  './ui/events.js',
+  './ui/help.css',
+  './ui/help.js',
   './ui/input.js',
   './ui/main.js',
   './ui/render.js',

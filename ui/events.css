@@ -1,0 +1,269 @@
+/* LOOK OF THE SIDE GAMES (events), the rewards tray and the card album.
+   Everything here is made by ui/events.js. Colors come from the same
+   variables as ui/style.css (set from config/theme.js). */
+
+/* Home now holds a list, so its middle part scrolls up and down. */
+.home-mid {
+  justify-content: flex-start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.home-mid > * { flex-shrink: 0; }
+
+/* Results may grow too: keep it centered while it fits, scroll when it does not. */
+.results-mid { justify-content: flex-start; overflow-y: auto; overflow-x: hidden; }
+.results-mid > * { flex-shrink: 0; }
+.results-mid > :first-child { margin-top: auto; }
+.results-mid > :last-child { margin-bottom: auto; }
+.settings-mid { overflow-y: auto; }
+.settings-mid > * { flex-shrink: 0; }
+
+#home-events, #results-events { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.ev-dim { color: var(--dim); }
+.ev-empty { text-align: center; padding: 8px 0; }
+
+/* ---- Small pictures and reward chips ---- */
+.ev-icon { display: block; flex: none; }
+.ev-reward { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.ev-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ev-chip-boost { font-weight: 500; flex-wrap: wrap; white-space: normal; }
+.ev-chip-text { font-size: 13px; }
+
+/* ---- The running-boost banner (Home and Level) ---- */
+.ev-boosts { display: flex; flex-direction: column; gap: 6px; }
+.ev-boost {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff7dc; border: 1px solid #e0a100; border-radius: 12px;
+  padding: 6px 12px; font-size: 14px;
+}
+.ev-boost.compact { padding: 2px 10px; font-size: 13px; border-radius: 10px; }
+.ev-boost-icons { display: inline-flex; gap: 3px; }
+.ev-boost-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#level-boost { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---- Home: the Rewards and album buttons ---- */
+.ev-bar { display: flex; gap: 10px; }
+.ev-bar-btn {
+  flex: 1; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 10px;
+}
+.ev-badge {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  background: var(--accent); color: var(--accent-text);
+  font-size: 13px; font-weight: 700; line-height: 22px; text-align: center;
+}
+.ev-count { color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---- Home: the event list ---- */
+.ev-group { margin-top: 4px; text-align: left; }
+.ev-list {
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel); overflow: hidden;
+}
+.ev-item {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 56px; padding: 6px 12px;
+  cursor: pointer; touch-action: manipulation;
+}
+.ev-item + .ev-item { border-top: 1px solid var(--line); }
+.ev-item:active { background: var(--tray); }
+.ev-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ev-item-main { flex: 1; min-width: 0; }
+.ev-item-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-item-sub {
+  font-size: 14px; color: var(--dim);
+  display: flex; align-items: center; gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.ev-item-side { display: flex; align-items: center; gap: 8px; flex: none; }
+.ev-time { font-size: 14px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ev-time.strong { color: var(--text); font-weight: 600; }
+.ev-start { min-height: 44px; padding: 0 14px; }
+.ev-start.wide { width: 100%; }
+.ev-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 6px; background: var(--tray); color: var(--dim);
+}
+.ev-tag.won { background: #dff3e7; color: #0b6b39; }
+.ev-tag.lost { background: #f6e1e1; color: var(--danger); }
+
+/* ---- The pop-up sheet ---- */
+.ev-back {
+  position: fixed; inset: 0; z-index: 8; /* under the yes/no question (10) */
+  background: rgba(27, 32, 48, 0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.ev-sheet {
+  width: 100%; max-width: 480px; max-height: 92%;
+  background: var(--bg);
+  border-radius: 18px 18px 0 0;
+  display: flex; flex-direction: column; min-height: 40%;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.ev-sheet-head {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.ev-sheet-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 22px; }
+.ev-head-btn { min-height: 44px; min-width: 64px; padding: 0 12px; }
+.ev-sheet-body {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 12px 16px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ev-sheet-body > * { flex-shrink: 0; }
+.ev-top { display: flex; flex-direction: column; gap: 8px; }
+.ev-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ev-summary { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
+.ev-head { margin-top: 6px; }
+
+/* Prize header */
+.ev-prizes { display: flex; flex-direction: column; gap: 6px; }
+.ev-prize-line { display: flex; align-items: center; gap: 10px; }
+.ev-prize-place { min-width: 34px; font-weight: 700; }
+
+/* Progress bar */
+.ev-progress { display: flex; align-items: center; gap: 10px; }
+.ev-track {
+  flex: 1; height: 14px; border-radius: 7px;
+  background: var(--tray); overflow: hidden;
+}
+.ev-fill { height: 100%; background: var(--accent); border-radius: 7px; }
+.ev-progress-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Ranked rows */
+.ev-rows { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.ev-row {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 8px;
+  min-height: 40px; padding: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ev-row + .ev-row { border-top: 1px solid var(--line); }
+.ev-row.top { min-height: 48px; font-weight: 600; }
+.ev-place { font-weight: 700; color: var(--dim); text-align: center; }
+.ev-row.top .ev-place { color: var(--accent); }
+.ev-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-score { font-weight: 700; }
+.ev-prize { display: flex; justify-content: flex-end; max-width: 130px; }
+.ev-prize .ev-reward { justify-content: flex-end; gap: 2px 6px; }
+.ev-prize .ev-chip { font-size: 12px; }
+/* The player's own row: green, and pinned to the edge while off screen. */
+.ev-row.you {
+  position: sticky; bottom: 0; top: 0; z-index: 1;
+  background: #dff3e7; color: #0b4f2b; font-weight: 700;
+  border-radius: 10px; outline: 1px solid #0b8a48; outline-offset: -1px;
+}
+.ev-row.you .ev-place { color: #0b6b39; }
+
+/* Step list */
+.ev-steps { border: 1px solid var(--line); border-radius: 12px; }
+.ev-step {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 4px 10px;
+}
+.ev-step + .ev-step { border-top: 1px solid var(--line); }
+.ev-step-mark {
+  flex: none; width: 26px; height: 26px; border-radius: 13px;
+  background: var(--tray); color: var(--dim);
+  font-size: 13px; font-weight: 700; line-height: 26px; text-align: center;
+}
+.ev-step { flex-wrap: wrap; } /* a long reward drops to its own line */
+.ev-step-need { flex: 1 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ev-step .ev-reward { margin-left: auto; justify-content: flex-end; max-width: 100%; }
+.ev-step.done { color: var(--dim); }
+.ev-step.done .ev-step-mark { background: #0b8a48; color: #fff; }
+.ev-step.current { background: var(--panel); font-weight: 700; }
+.ev-step.current .ev-step-mark { background: var(--accent); color: var(--accent-text); }
+.ev-step.grand { background: #fff7dc; }
+
+/* Lanes of the staged streak race */
+.ev-lanes { display: flex; justify-content: space-around; gap: 6px; }
+.ev-lane { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ev-lane-goal {
+  font-size: 12px; font-weight: 700; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 8px; padding: 1px 8px;
+}
+.ev-lane-track {
+  position: relative; width: 16px; height: 180px; margin: 14px 0;
+  background: var(--tray); border-radius: 8px;
+}
+.ev-lane-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--line); border-radius: 8px; }
+.ev-lane-marker {
+  position: absolute; left: 50%; transform: translate(-50%, 50%);
+  width: 30px; height: 30px; border-radius: 15px;
+  background: var(--dim); color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 30px; text-align: center;
+}
+.ev-lane.you .ev-lane-fill { background: #9fd8b8; }
+.ev-lane.you .ev-lane-marker { background: #0b8a48; }
+.ev-lane-name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-lane.you .ev-lane-name { font-weight: 700; color: #0b6b39; }
+
+/* The company's shared total */
+.ev-pot { display: flex; flex-direction: column; gap: 8px; }
+.ev-pot-bar { position: relative; margin: 9px 14px; } /* room for a chest standing at each end */
+.ev-pot-chest {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--bg); border: 2px solid #e0a100; color: #fff;
+  font-size: 15px; font-weight: 700; line-height: 24px; text-align: center;
+}
+.ev-pot-bar .ev-track { width: 100%; }
+.ev-pot-chest.open { background: #0b8a48; border-color: #0b8a48; }
+.ev-pot-num { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---- Rewards tray ---- */
+.ev-tray-item { display: flex; align-items: center; gap: 10px; }
+.ev-tray-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ev-tray-main .ev-item-title { white-space: normal; }
+.ev-claim { flex: none; min-height: 44px; }
+.ev-expire { font-size: 13px; }
+
+/* ---- Album ---- */
+.ev-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ev-set, .ev-card {
+  min-height: 84px; padding: 8px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--text);
+  font: inherit; text-align: center;
+}
+.ev-set { appearance: none; -webkit-appearance: none; touch-action: manipulation; }
+.ev-set:active { background: var(--tray); }
+.ev-set.done { border-color: #0b8a48; background: #dff3e7; }
+.ev-set-name, .ev-card-name { font-size: 13px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.ev-set-count { font-size: 14px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.ev-set.done .ev-set-count { color: #0b6b39; font-weight: 700; }
+.ev-card { min-height: 96px; background: var(--bg); }
+.ev-stars { color: #e0a100; font-size: 13px; letter-spacing: 1px; }
+.ev-card.missing { background: var(--tray); color: var(--dim); border-style: dashed; }
+.ev-card.missing .ev-stars { color: var(--dim); opacity: 0.6; }
+.ev-card-missing { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---- Results: event lines and new rewards ---- */
+.ev-lines .ev-line-title { font-weight: 600; }
+.ev-lines .ev-line-text { text-align: right; }
+.ev-new { display: flex; flex-direction: column; gap: 8px; }
+.ev-new-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ev-new-title { font-weight: 600; }
+
+/* ---- Settings: three choices side by side ---- */
+#settings-rivals { display: flex; flex-direction: column; gap: 10px; }
+.ev-seg3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ev-seg3 .btn { padding: 0 6px; }
+
+/* Short phones (375 x 667): a little tighter. */
+@media (max-height: 700px) {
+  .ev-item { min-height: 52px; }
+  .ev-lane-track { height: 150px; }
+}

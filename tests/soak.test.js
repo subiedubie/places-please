@@ -9,9 +9,11 @@ import { findGroups } from '../engine/matches.js';
 import { findLegalMoves } from '../engine/moves.js';
 import { settle } from '../engine/resolve.js';
 import { D1 } from '../engine/drops.js';
-import { get, cloneBoard, isEmpty, isPower, isPiece, isBlock, isDrop } from '../engine/board.js';
+import {
+  get, cloneBoard, isEmpty, isPower, isPiece, isBlock, isDrop, isPart, obstacleDef, footprint, floorAt,
+} from '../engine/board.js';
 import { makeRng } from '../engine/rng.js';
-import { OBSTACLES } from '../config/obstacles.js';
+import { OBSTACLES, OBSTACLES2, FLOORS, BATCH2_READY } from '../config/obstacles.js';
 
 function randomAction(game, rng) {
   const moves = findLegalMoves(game.board);
@@ -44,10 +46,29 @@ function checkBoard(game, holes, label) {
         continue;
       }
       assert.notEqual(cell, null, `${label}: cell became a hole`);
+      const floor = floorAt(board, x, y);
+      assert.ok(floor === null || FLOORS[floor], `${label}: strange floor at ${x},${y}`);
       if (isEmpty(cell)) empties++;
       else if (isBlock(cell)) {
-        assert.ok(OBSTACLES[cell.kind], `${label}: unknown block kind`);
-        assert.ok(cell.hp >= 1 && cell.hp <= OBSTACLES[cell.kind].hits.length, `${label}: bad hp at ${x},${y}`);
+        const def = obstacleDef(cell.kind);
+        assert.ok(def, `${label}: unknown block kind`);
+        // Generators, color-list blocks and curtains have no hit list; their
+        // hp only has to be at least 1.
+        const most = def.hits.length || (cell.colors ? cell.colors.length : 1);
+        assert.ok(cell.hp >= 1 && cell.hp <= most, `${label}: bad hp at ${x},${y}`);
+        // Every other cell of a big block must be a part pointing back at it.
+        for (const p of footprint(cell, x, y)) {
+          if (p.x === x && p.y === y) continue;
+          assert.deepEqual(get(board, p.x, p.y), { t: 'part', ax: x, ay: y }, `${label}: big block at ${x},${y} lost a part`);
+        }
+      } else if (isPart(cell)) {
+        // A part must belong to a block that really covers it.
+        const owner = get(board, cell.ax, cell.ay);
+        assert.ok(isBlock(owner), `${label}: orphan part at ${x},${y}`);
+        assert.ok(
+          footprint(owner, cell.ax, cell.ay).some((p) => p.x === x && p.y === y),
+          `${label}: part at ${x},${y} outside its block`,
+        );
       } else {
         assert.ok(isPiece(cell) || isPower(cell) || isDrop(cell), `${label}: strange cell at ${x},${y}`);
       }
@@ -176,5 +197,98 @@ test('200 random games on obstacle levels never break the board', () => {
   console.log(
     `obstacle soak: ${results.won} won, ${results.lost} lost; ${seen.hits} block hits, ` +
     `${seen.collected} droppers collected; destroyed: ${JSON.stringify(seen.destroyed)}`,
+  );
+});
+
+// ---- Hand-made batch-2 levels (docs/OBSTACLES2.md) --------------------------
+
+const F = (x, y, kind) => ({ x, y, kind });
+
+const BATCH2_LEVELS = [
+  // D: every batch-2 block kind on one 9x9 board, with both kinds of floor.
+  {
+    n: 9101, tier: 0, cols: 9, rows: 9, colors: 4, moves: 35,
+    holes: [{ x: 0, y: 0 }, { x: 8, y: 0 }],
+    targets: [{ block: 'confetti', need: 8 }, { block: 'dove', need: 3 }, { block: 'candy', need: 3 }, { block: 'planter', need: 1 }],
+    blocks: [
+      B(0, 3, 'planter'), B(7, 3, 'dovecote'), B(3, 5, 'footlights'), B(5, 2, 'fireworks'),
+      B(2, 7, 'truss', { w: 5 }), B(3, 1, 'ticketbooth'), B(2, 2, 'bouquet'),
+      B(8, 6, 'tophat'), B(0, 6, 'popper'), B(4, 4, 'candyjar'), B(6, 5, 'makeupcase'),
+      B(1, 8, 'curtain', { color: 0, need: 10 }), B(7, 8, 'curtain', { color: 0, need: 10 }),
+      B(1, 0, 'curtain', { color: 1, need: 20, inside: { t: 'power', kind: 'show' } }),
+    ],
+    drops: [],
+    floor: [
+      F(2, 3, 'confetti'), F(3, 3, 'confetti'), F(4, 3, 'confetti'), F(5, 4, 'confetti'), F(6, 4, 'confetti'),
+      F(1, 6, 'confetti'), F(2, 6, 'confetti'), F(6, 6, 'confetti'), F(7, 6, 'confetti'), F(4, 8, 'confetti'),
+      F(4, 4, 'confetti'), F(1, 8, 'petals'), F(8, 8, 'petals'), F(0, 8, 'petals'),
+    ],
+  },
+  // E: five colors, holes in the middle, batch-1 blocks and a sandbag mixed in.
+  {
+    n: 9102, tier: 0, cols: 8, rows: 9, colors: 5, moves: 30,
+    holes: [{ x: 3, y: 4 }, { x: 4, y: 4 }, { x: 0, y: 8 }],
+    targets: [{ block: 'petals', need: 4 }, { block: 'popcorn', need: 2 }, { block: 'curtain', need: 2 }, { color: 2, need: 30 }],
+    blocks: [
+      B(0, 1, 'fireworks', { colors: [0, 1] }), B(6, 1, 'fireworks'), B(3, 2, 'bouquet'), B(4, 2, 'bouquet'),
+      B(0, 4, 'tophat'), B(7, 4, 'popper'), B(1, 5, 'makeupcase', { open: true }), B(6, 5, 'makeupcase'),
+      B(2, 6, 'planter'), B(4, 6, 'footlights', { colors: [0, 1, 2, 3] }), B(6, 7, 'dovecote'),
+      B(1, 3, 'candyjar'), B(6, 3, 'candyjar'), B(3, 0, 'truss'), B(1, 8, 'ticketbooth'),
+      B(4, 8, 'curtain', { color: 3, need: 8, inside: { t: 'block', kind: 'crate' } }),
+      B(5, 8, 'curtain', { color: 3, need: 8 }), B(2, 5, 'hatbox'), B(5, 5, 'padlock'),
+    ],
+    drops: [{ x: 7, y: 0 }],
+    floor: [
+      F(3, 3, 'petals'), F(4, 3, 'petals'), F(2, 4, 'petals'), F(5, 4, 'petals'), F(3, 5, 'petals'),
+      F(4, 5, 'petals'), F(0, 0, 'confetti'), F(7, 2, 'confetti'), F(3, 2, 'confetti'),
+    ],
+  },
+];
+
+test('150 random games on batch-2 levels never break the board', () => {
+  // The two layouts must use every kind the engine says is ready.
+  const used = new Set(BATCH2_LEVELS.flatMap((l) => l.blocks.map((b) => b.kind).concat(l.floor.map((f) => f.kind))));
+  for (const kind of BATCH2_READY) assert.ok(used.has(kind), `${kind} is in BATCH2_READY but in neither soak level`);
+  // Every big block in the layouts really fits (nothing silently left out).
+  for (const level of BATCH2_LEVELS) {
+    const game = newGame(level, 1);
+    for (const b of level.blocks) {
+      assert.equal(get(game.board, b.x, b.y).kind, b.kind, `level ${level.n}: ${b.kind} at ${b.x},${b.y} was not placed`);
+    }
+  }
+
+  const rng = makeRng(1117);
+  const results = { won: 0, lost: 0 };
+  const seen = { hits: 0, destroyed: {}, collected: {}, floor: {}, toggles: 0, opened: 0 };
+  const watch = (events) => {
+    for (const e of events) {
+      if (e.type === 'block') {
+        seen.hits++;
+        if (e.destroyed) seen.destroyed[e.kind] = (seen.destroyed[e.kind] || 0) + 1;
+        if (e.by === 'count') seen.opened++;
+      } else if (e.type === 'collect') seen.collected[e.kind] = (seen.collected[e.kind] || 0) + 1;
+      else if (e.type === 'floor') seen.floor[e.kind] = (seen.floor[e.kind] || 0) + 1;
+      else if (e.type === 'toggle') seen.toggles++;
+    }
+  };
+  for (let i = 0; i < 150; i++) {
+    const level = BATCH2_LEVELS[i % BATCH2_LEVELS.length];
+    const game = newGame(level, 7000 + i);
+    playOut(game, rng, `batch-2 level ${level.n}`, watch);
+    results[game.status]++;
+  }
+  // Be sure the games really exercised the new rules.
+  assert.ok(seen.floor.confetti > 0 && seen.floor.petals > 0, 'floor was removed');
+  for (const kind of ['dove', 'popcorn', 'candy']) assert.ok(seen.collected[kind] > 0, `no ${kind} was ever collected`);
+  assert.ok(seen.toggles > 0, 'makeup cases flipped');
+  assert.ok(seen.opened > 0, 'curtains opened');
+  for (const kind of Object.keys(OBSTACLES2)) {
+    if (OBSTACLES2[kind].generator) continue; // generators never break
+    assert.ok(seen.destroyed[kind] > 0, `no ${kind} was ever destroyed in 150 games`);
+  }
+  console.log(
+    `batch-2 soak: ${results.won} won, ${results.lost} lost; ${seen.hits} block hits; ` +
+    `destroyed: ${JSON.stringify(seen.destroyed)}; collected: ${JSON.stringify(seen.collected)}; ` +
+    `floor: ${JSON.stringify(seen.floor)}; ${seen.toggles} toggles`,
   );
 });

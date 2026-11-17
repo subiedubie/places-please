@@ -164,6 +164,33 @@ html, body {
 .level-bottom { display: flex; justify-content: flex-start; }
 .level-bottom .btn { min-width: 96px; }
 
+/* ---- Boosters (ui/boosters.js): the bar under the board, the row on Home ---- */
+.level-bottom { align-items: center; gap: 10px; }
+.booster-bar { flex: 1; display: flex; justify-content: flex-end; gap: 8px; }
+.gift .booster-bar { justify-content: center; flex: none; }
+.booster {
+  appearance: none; -webkit-appearance: none;
+  position: relative;
+  width: 52px; height: 52px; padding: 0;
+  border: 0; border-radius: 12px;
+  background: var(--tray);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: manipulation;
+}
+.booster.empty canvas { opacity: 0.45; }
+.booster.armed { outline: 3px solid var(--accent); outline-offset: -3px; background: var(--panel); }
+.booster-count {
+  position: absolute; right: -4px; bottom: -4px;
+  min-width: 20px; padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--text); color: var(--bg);
+  font-size: 12px; font-weight: 700; line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.booster.empty .booster-count { background: var(--accent); color: var(--accent-text); }
+.booster-hint { min-height: 1.4em; text-align: center; }
+#oom-buy:disabled { opacity: 0.45; }
+
 /* ---- Results ---- */
 .results-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; min-height: 0; }
 #results-sub { text-align: center; }

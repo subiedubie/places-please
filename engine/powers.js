@@ -34,7 +34,7 @@
 
 import {
   EMPTY, get, set, inBounds, cloneBoard, isPiece, isPower, power,
-  isBlock, isDrop, hitBlock, takesHit,
+  isBlock, isPart, isDrop, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor,
 } from './board.js';
 
 // The name a cell goes by inside the "already fired" and "already cleared" sets.
@@ -84,10 +84,19 @@ function clearArea(run, coords, cause, chain = true) {
     if (isDrop(was)) continue; // the dropper cannot be damaged
     const key = keyOf(x, y);
     if (run.hitNow.has(key)) continue; // a block this effect has already hit
-    if (isBlock(was)) {
-      run.hitNow.add(key);
-      const hit = hitBlock(board, x, y, 'power', undefined, run.opts.rng);
-      if (hit) blockHits.push(hit);
+    if (isBlock(was) || isPart(was)) {
+      // A part of a big block stands for the whole block. Mark every cell the
+      // block covers, so this effect hits it once and then leaves alone
+      // whatever it turns into.
+      const at = anchorOf(board, x, y);
+      if (!at) continue;
+      for (const p of footprint(at.cell, at.x, at.y)) run.hitNow.add(keyOf(p.x, p.y));
+      const hits = hitBlockEvents(board, at.x, at.y, 'power', undefined, run.opts.rng);
+      blockHits.push(...hits);
+      // Fireworks that just broke go off like a Grenade, in their turn.
+      if (hits.length > 0 && hits[0].blast) {
+        run.queue.push({ x: at.x, y: at.y, kind: 'show', cause: 'fireworks' });
+      }
       continue;
     }
     if (run.cleared.has(key)) {
@@ -98,6 +107,9 @@ function clearArea(run, coords, cause, chain = true) {
     run.cleared.add(key);
     set(board, x, y, EMPTY);
     cells.push({ x, y, was });
+    // Floor under a cleared cell is removed (reported after the clear event).
+    const lifted = liftFloor(board, x, y);
+    if (lifted) blockHits.push(lifted);
     if (chain && isPower(was) && !run.fired.has(key)) {
       run.fired.add(key);
       run.queue.push({ x, y, kind: was.kind });
@@ -190,7 +202,8 @@ function mostCommonColor(board) {
 function chooseTarget(run, footprint = (x, y) => [{ x, y }]) {
   const { board, opts } = run;
   const live = (x, y) => {
-    const cell = get(board, x, y); // null for holes and off the board
+    let cell = get(board, x, y); // null for holes and off the board
+    if (isPart(cell)) cell = get(board, cell.ax, cell.ay); // a part stands for its block
     if (cell === null || cell.t === 'empty' || isDrop(cell)) return null;
     if (run.cleared.has(keyOf(x, y))) return null;
     if (run.hitNow.has(keyOf(x, y))) return null; // a block this effect already hit (or what it left behind)
@@ -261,7 +274,8 @@ function runPower(run, item) {
   } else if (kind === 'spot-v') {
     clearArea(run, colCells(board, x), kind);
   } else if (kind === 'show') {
-    clearArea(run, squareCells(x, y, 2), kind);
+    // (Fireworks use the same 5x5 blast, reported with cause 'fireworks'.)
+    clearArea(run, squareCells(x, y, 2), item.cause ?? kind);
   } else if (kind === 'under') {
     clearArea(run, plusCells(x, y), kind);
     flyAndClear(run, { x, y }, kind);
@@ -303,6 +317,18 @@ export function fire(board, at, opts = {}) {
   if (run.fired.has(key)) return []; // already went off
   run.fired.add(key);
   run.queue.push({ x: at.x, y: at.y, kind: cell.kind, swapColor: opts.swapColor });
+  drain(run);
+  return run.events;
+}
+
+// ---- blast ------------------------------------------------------------------
+
+// A Grenade-sized (5x5) blast centred on `at` with no power-up there: what
+// Fireworks do when they break. Pieces are cleared, blocks take a power hit,
+// power-ups caught in it go off. Changes the board; returns the event list.
+export function blast(board, at, opts = {}) {
+  const run = startRun(board, opts);
+  run.queue.push({ x: at.x, y: at.y, kind: 'show', cause: 'fireworks' });
   drain(run);
   return run.events;
 }
@@ -403,7 +429,7 @@ export function combine(board, a, b, opts = {}) {
     const target = chooseTarget(run, footprint);
     const to = target ?? { x: b.x, y: b.y }; // no target left: go off in place
     if (target) run.events.push({ type: 'fly', from: { x: b.x, y: b.y }, to });
-    if (isBlock(get(board, to.x, to.y))) {
+    if (anchorOf(board, to.x, to.y)) {
       // Landing on a block: the block stays where it is, and the carried
       // power-up goes off from that spot (its blast gives the block its hit).
     } else {

@@ -12,6 +12,9 @@ import { fitCanvas, layoutFor, drawBoard } from './render.js';
 import { attachInput } from './input.js';
 import { playEvents, playSwap, wait } from './anim.js';
 import { createScreens } from './screens.js';
+import { createEvents } from './events.js';
+import { createBoosterUi } from './boosters.js';
+import { initHelp, showLevelIntro } from './help.js'; // rule cards, "?" and How to play
 
 // Copy the colors from config/theme.js into the page, so that file is the
 // one place to change them.
@@ -34,6 +37,9 @@ document.title = theme.name;
 const powerNames = Object.fromEntries(Object.entries(theme.powers || theme.powerups || {}).map(([k, v]) => [k, v.name]));
 const session = createSession(window.localStorage, { names: powerNames });
 const ui = createScreens(theme);
+// The side games, rewards tray and album (ui/events.js). After a reward is
+// claimed or an event started, Home is drawn again if it is showing.
+const eventUi = createEvents(session, () => { if (!ui.$('screen-home').hidden) goHome(); });
 const $ = ui.$;
 const canvas = $('board');
 
@@ -44,6 +50,17 @@ let busy = false;    // true while a move is being played back
 let pressed = null;  // the cell under the player's finger, if any
 let onLevel = false; // true while the Level screen is showing
 
+// The booster bar, the out-of-moves sheet and the pre-level boosters on Home
+// (ui/boosters.js). A booster is played back through handleAction like a move.
+const boosters = createBoosterUi({
+  session, theme, canvas,
+  getLayout: () => layout,
+  isBusy: () => busy || !onLevel,
+  play: (action) => handleAction(action),
+  confirm: (text, yes, no) => ui.confirm(text, yes, no),
+  onHomeChange: () => goHome(),
+});
+
 const speed = () => (session.save.settings && session.save.settings.speed) || 'normal';
 const speedFactor = () => (speed() === 'fast' ? 0.5 : 1);
 
@@ -53,7 +70,9 @@ const speedFactor = () => (speed() === 'fast' ? 0.5 : 1);
 function drawFrame(board, overlay) {
   if (!ctx || !layout || !board) return;
   shown = board;
-  const extra = pressed && !busy ? { ...(overlay || {}), pressed } : overlay;
+  // superPrism: Magic Balls are drawn in their Super form on a Super level.
+  const extra = { ...(overlay || {}), superPrism: !!(session.game && session.game.superPrism) };
+  if (pressed && !busy) extra.pressed = pressed;
   drawBoard(ctx, board, layout, theme, extra);
 }
 
@@ -84,6 +103,8 @@ function goHome() {
   const resuming = Boolean(save.current);
   const gift = !resuming && typeof session.nextGift === 'function' ? session.nextGift() : null;
   ui.home(save, tier, resuming, gift);
+  boosters.refreshHome(resuming); // pre-level boosters, and the bonus-level name
+  eventUi.home();
   ui.show('home');
 }
 
@@ -94,6 +115,9 @@ function goLevel() {
   pressed = null;
   onLevel = true;
   ui.hud(game);
+  boosters.disarm();
+  boosters.refreshBar(); // the booster bar under the board
+  eventUi.level(); // the boost banner; before refit() because it takes height
   ui.show('level');
   refit(); // must come after show(): a hidden canvas has no size
 }
@@ -101,12 +125,14 @@ function goLevel() {
 function goResults(result, levelN) {
   onLevel = false;
   ui.results(result, levelN);
+  eventUi.results(result);
   ui.show('results');
 }
 
 function goSettings(message) {
   onLevel = false;
   ui.settings(session, message);
+  eventUi.settings();
   ui.show('settings');
 }
 
@@ -118,7 +144,11 @@ async function handleAction(action) {
   pressed = null;
   try {
     const before = shown; // the board as the player sees it now
-    const events = session.doAction(action);
+    // A booster goes through the same playback as a move. 'wake' does nothing
+    // on the board: it only re-opens the out-of-moves sheet (see startLevel).
+    const events = action.type === 'booster' ? session.useBooster(action.kind, action.at)
+      : action.type === 'wake' ? [{ type: 'wake' }]
+      : session.doAction(action);
     const nothingHappened = !events || events.length === 0 || events[0].type === 'invalid';
     const swapMs = 70 * speedFactor();
 
@@ -144,7 +174,11 @@ async function handleAction(action) {
     rememberTargets();
     ui.hud(session.game);
 
-    if (session.isOver()) {
+    // Out of moves: offer more moves before the level is closed as a loss.
+    // If the player buys them the level simply carries on.
+    if (session.isOver() && session.game.status === 'lost' && await boosters.outOfMoves()) {
+      ui.hud(session.game);
+    } else if (session.isOver()) {
       const levelN = session.game.level.n;
       await wait(350); // a moment to see the final board
       const result = session.finish();
@@ -176,7 +210,8 @@ attachInput(
   () => layout,
   () => shown,
   handleAction,
-  () => busy || !onLevel || !layout || !shown,
+  // (while a booster is armed, taps belong to it: see ui/boosters.js)
+  () => busy || !onLevel || !layout || !shown || Boolean(boosters.armed()),
   (cell) => { // highlight the cell under the finger
     pressed = cell;
     if (!busy && shown) drawFrame(shown);
@@ -188,7 +223,12 @@ attachInput(
 function startLevel() {
   goLevel();
   rememberTargets();
+  // A level closed while the out-of-moves sheet was showing: show it again.
+  if (session.isOver()) handleAction({ type: 'wake' });
+  // A card for each obstacle the player has not met before (ui/help.js).
+  else showLevelIntro(session.game.level, session);
 }
+initHelp({ session }); // the "?" and "How to play" buttons
 
 $('home-play').onclick = startLevel;
 $('home-settings').onclick = () => goSettings('');

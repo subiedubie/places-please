@@ -1,0 +1,68 @@
+/* LOOK OF THE HELP: the "new obstacle" card, the "?" sheet and the
+   "How to play" sheet (ui/help.js). Colors come from ui/style.css. */
+
+/* Above the other pop-ups. */
+.help-overlay { z-index: 30; padding: 16px; }
+
+/* ---- The "new obstacle" card ---- */
+.help-card { align-items: center; text-align: center; gap: 10px; }
+.help-card .btn { align-self: stretch; }
+.help-card-name { font-size: 22px; font-weight: 700; }
+.help-card-rule { margin: 0; font-size: 17px; }
+.help-icon { display: block; flex: none; }
+
+/* ---- The sheets ---- */
+.help-sheet {
+  width: 100%;
+  max-width: 440px;
+  max-height: 100%;
+  background: var(--bg);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.help-sheet-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 12px 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+/* The part that scrolls up and down under the finger. */
+.help-sheet-body {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 4px 16px 16px;
+}
+.help-head { margin-top: 14px; margin-bottom: 4px; color: var(--accent); }
+.help-intro { margin: 0 0 4px; font-size: 15px; }
+.help-list { margin: 0; padding-left: 20px; font-size: 15px; }
+.help-list li { margin: 4px 0; }
+
+/* One obstacle: picture, name, sentence. */
+.help-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  min-height: 60px;
+}
+.help-row:last-child { border-bottom: 0; }
+.help-words { flex: 1; min-width: 0; }
+.help-name { font-weight: 700; }
+.help-rule { font-size: 15px; color: var(--dim); }
+.help-more { display: block; width: 100%; margin-top: 14px; }
+
+/* ---- The buttons on the screens ---- */
+/* The round "?" in the middle of the bar above the board. */
+.help-q {
+  width: 44px; min-width: 44px; height: 44px; min-height: 44px;
+  padding: 0; border-radius: 50%;
+  font-size: 20px;
+}
+/* "How to play" next to Settings on Home. */
+.home-bottom { gap: 10px; }
+.home-bottom .btn { min-width: 140px; }
+/* "How to play" at the top right of Settings. */
+.settings-top #settings-help { justify-self: end; padding: 0 10px; font-size: 14px; }

@@ -6,8 +6,9 @@
 
 import {
   get, set, cloneBoard, piece, power, EMPTY,
-  isEmpty, isHole, isBlock, isDrop, isMovable, hitBlock,
+  isEmpty, isHole, isFixed, isDrop, isMovable, isPiece, hitBlockEvents, anchorOf, liftFloor,
 } from './board.js';
+import { blast } from './powers.js';
 import { findGroups, powerForShape } from './matches.js';
 
 // ---- Falling ----------------------------------------------------------------
@@ -35,7 +36,7 @@ function stretchesOf(board, x) {
   for (let y = board.rows - 1; y >= 0; y--) {
     const cell = get(board, x, y);
     if (isHole(cell)) continue; // things pass straight through holes
-    if (isBlock(cell)) {
+    if (isFixed(cell)) { // a block, or a part of a big block
       out.push(rows);
       rows = [];
     } else {
@@ -210,13 +211,19 @@ function hitNeighbours(board, group, ctx) {
   const out = [];
   for (const c of group.cells) {
     for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
-      const x = c.x + dx;
-      const y = c.y + dy;
-      const key = `${x},${y}`;
-      if (done.has(key) || !isBlock(get(board, x, y))) continue;
+      // A part of a big block stands for the whole block (its anchor), so a
+      // big block is hit once per group however many of its cells are touched.
+      const at = anchorOf(board, c.x + dx, c.y + dy);
+      if (!at) continue;
+      const key = `${at.x},${at.y}`;
+      if (done.has(key)) continue;
       done.add(key);
-      const hit = hitBlock(board, x, y, 'match', group.color, ctx.rng);
-      if (hit) out.push(hit);
+      const hits = hitBlockEvents(board, at.x, at.y, 'match', group.color, ctx.rng);
+      out.push(...hits);
+      // Fireworks that just broke go off like a Grenade, centred on the anchor.
+      if (hits.length > 0 && hits[0].blast) {
+        out.push(...blast(board, { x: at.x, y: at.y }, { rng: ctx.rng, needs: ctx.needs }));
+      }
     }
   }
   return out;
@@ -273,10 +280,24 @@ export function settle(board, ctx, origins = []) {
 
     // Clear every group. "was" remembers what each cell held, so the game
     // can count cleared colors and the screen can animate them.
+    // (A fireworks blast set off by an earlier group may already have taken
+    // some of a later group's pieces; a group with nothing left is skipped.)
+    const gone = new Set();
     for (const group of groups) {
-      const cells = group.cells.map((c) => ({ x: c.x, y: c.y, was: get(board, c.x, c.y) }));
-      for (const c of group.cells) set(board, c.x, c.y, EMPTY);
+      const cells = group.cells
+        .map((c) => ({ x: c.x, y: c.y, was: get(board, c.x, c.y) }))
+        .filter((c) => isPiece(c.was));
+      if (cells.length === 0) {
+        gone.add(group);
+        continue;
+      }
+      for (const c of cells) set(board, c.x, c.y, EMPTY);
       events.push({ type: 'clear', cause: 'match', color: group.color, cells });
+      // Floor under a cleared piece is removed: { type: 'floor', x, y, kind }
+      for (const c of cells) {
+        const lifted = liftFloor(board, c.x, c.y);
+        if (lifted) events.push(lifted);
+      }
       // Blocks next to the group take a match hit:
       //   { type: 'block', x, y, kind, hpLeft, destroyed, by: 'match' }
       events.push(...hitNeighbours(board, group, ctx));
@@ -285,7 +306,7 @@ export function settle(board, ctx, origins = []) {
     // Each group makes at most one power-up, decided by its shape.
     for (const group of groups) {
       const kind = powerForShape(group.shape);
-      if (kind === null) continue;
+      if (kind === null || gone.has(group)) continue;
       const at = powerSpot(group, pass === 1 ? origins : []);
       set(board, at.x, at.y, power(kind));
       events.push({ type: 'spawn-power', at, kind });
