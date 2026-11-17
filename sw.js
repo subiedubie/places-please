@@ -4,7 +4,7 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v5';
+const CACHE = 'places-please-v6';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
@@ -58,6 +58,7 @@ const FILES = [
   './meta/shop.js',
   './ui/anim.js',
   './ui/boosters.js',
+  './ui/eventicons.js',
   './ui/events.css',
   './ui/events.js',
   './ui/help.css',

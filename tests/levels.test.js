@@ -64,11 +64,20 @@ test('colors and target counts follow the curve', () => {
     assert.equal(L.colors, L.tier >= 2 ? 5 : 4, `level ${n}`);
   }
   for (let n = 21; n <= 100; n++) assert.equal(generateLevel(n).colors, 5);
-  // Levels 1-10 use the small 7x8 board.
+  // Levels 1-10 use the small 7x8 board; the first two are plain rectangles.
   for (let n = 1; n <= 10; n++) {
     const L = generateLevel(n);
-    assert.deepEqual([L.cols, L.rows, L.holes.length], [7, 8, 0]);
+    assert.deepEqual([L.cols, L.rows], [7, 8]);
   }
+  for (let n = 1; n <= 2; n++) assert.equal(generateLevel(n).holes.length, 0);
+  // Board shapes vary: the first 60 levels use many different layouts
+  // (the owner asked for this on 17 Nov. 2026: "the board designs are always the same").
+  const layouts = new Set();
+  for (let n = 1; n <= 60; n++) {
+    const L = generateLevel(n);
+    layouts.add(`${L.cols}x${L.rows}:` + L.holes.map((h) => `${h.x},${h.y}`).sort().join(';'));
+  }
+  assert.ok(layouts.size >= 20, `only ${layouts.size} different board shapes in levels 1-60`);
   // Somewhere later, more than one target and a board with holes both turn up.
   const later = [];
   for (let n = 11; n <= 200; n++) later.push(generateLevel(n));
@@ -194,7 +203,7 @@ test('block kinds, paint colors, padlock contents and power-only limits', () => 
     assert.ok(powerOnly <= 8, `level ${n} has ${powerOnly} power-only cells`);
     assert.ok(flats <= 5, `level ${n} has ${flats} flats`);
     const kinds = Object.keys(kindCounts(L)).length;
-    assert.ok(kinds <= (L.tier >= 2 ? 3 : 2), `level ${n} has ${kinds} kinds`);
+    assert.ok(kinds <= CURVE.obstacles.maxKinds[L.tier], `level ${n} has ${kinds} kinds`);
   }
 });
 
@@ -310,28 +319,16 @@ function cellsOf(b) {
   return out;
 }
 
-test('batch 2 off: levels 1..400 are exactly what the generator made before batch 2', () => {
-  // Recorded from the generator before batch 2 was added (16 Nov. 2026).
-  const lines = [];
+test('batch 2 off: levels 1..400 use no batch-2 kinds and are the same every time', () => {
+  // (This used to compare against a recording made before batch 2. The
+  // recording was retired on 17 Nov. 2026 when the board shapes and obstacle
+  // density were changed on purpose.)
   for (let n = 1; n <= 400; n++) {
     const L = generateLevel(n);
-    lines.push(JSON.stringify([L.blocks, L.drops, L.targets, L.moves]));
     assert.deepEqual(L.floor, [], `level ${n} floor`);
+    for (const b of L.blocks) assert.ok(b.kind in OBSTACLES, `level ${n} uses ${b.kind}`);
+    assert.deepEqual(generateLevel(n), L, `level ${n} is not repeatable`);
   }
-  assert.equal(
-    lines[56],
-    '[[{"x":1,"y":8,"kind":"crate"},{"x":2,"y":8,"kind":"crate"},{"x":3,"y":8,"kind":"crate"},{"x":4,"y":8,"kind":"crate"},{"x":5,"y":8,"kind":"crate"},{"x":6,"y":8,"kind":"crate"},{"x":2,"y":7,"kind":"crate"},{"x":3,"y":7,"kind":"crate"},{"x":4,"y":7,"kind":"crate"},{"x":1,"y":7,"kind":"dryice"},{"x":5,"y":7,"kind":"dryice"},{"x":2,"y":6,"kind":"dryice"},{"x":4,"y":6,"kind":"dryice"},{"x":6,"y":6,"kind":"dryice"},{"x":1,"y":5,"kind":"dryice"}],[],[{"block":"crate","need":9},{"block":"dryice","need":6}],39]',
-    'level 57',
-  );
-  assert.equal(
-    lines[122],
-    '[[],[{"x":2,"y":2},{"x":3,"y":3},{"x":4,"y":2},{"x":5,"y":3},{"x":6,"y":3}],[{"block":"sandbag","need":5}],40]',
-    'level 123',
-  );
-  assert.equal(
-    createHash('sha256').update(lines.join('\n')).digest('hex'),
-    'cee89089fa2ee4356bb0a099e7226ee17faf1499641f9e13344cbf35597eb8e6',
-  );
 });
 
 test('batch 2: a kind that is not ready is never used; levels before the first intro do not change', () => {

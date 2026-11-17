@@ -1,4 +1,5 @@
-// EVENTS SCREENS: the side-game list on Home, the detail sheet of each side
+// EVENTS SCREENS: the grid of side-game badges on Home (the pictures are
+// drawn by ui/eventicons.js), the detail sheet of each side
 // game, the rewards tray, the card album, the timed-boost banners, the extra
 // lines on Results and the "Rival toughness" choice in Settings.
 //
@@ -15,13 +16,15 @@
 // The pop-up sheet is made here and added to #app.
 
 import { drawPowerIcon } from './render.js';
+import { drawEventIcon } from './eventicons.js'; // the round picture badges
 import { theme } from '../config/theme.js';
 
 // ---- Words and numbers you may want to change ----
 
 const TEXT = {
   noEvents: 'No events yet',
-  groups: { soon: 'Ends soon', block: 'This block', always: 'Always on' },
+  start: 'Start',          // the pulsing pill on an event waiting to be started
+  waiting: 'to claim',     // under the Rewards badge when nothing is about to expire
   rewards: 'Rewards',
   album: 'Playbill',
   trayEmpty: 'No rewards waiting. Prizes you win appear here until you claim them.',
@@ -44,9 +47,33 @@ const BOOSTER_NAMES = {
 // The three rival settings: the value that is saved, and the word shown.
 const RIVALS = [['relaxed', 'Relaxed'], ['even', 'Even'], ['tough', 'Tough']];
 
-const SOON_MS = 24 * 60 * 60 * 1000; // "Ends soon" = ends within this long
+// The short name written under each badge on Home (there is only room for
+// about twelve letters). The names on the left are the event names in
+// config/events.js. An event not listed here shows its full title, cut off
+// with "…" if it is too long.
+const SHORT_NAMES = {
+  weekly: 'Long Run',
+  critics: 'Critics',
+  'critics-streak': 'Rave Run',
+  'props-rose': 'Prop Room',
+  'props-lantern': 'Prop Room',
+  'props-star': 'Prop Room',
+  techweek: 'Tech Week',
+  company: 'Company',
+  dash: 'Dash',
+  scottish: 'Scottish Play',
+  ghostlight: 'Ghost Light',
+  'quickchange-star': 'Quick Change',
+  'quickchange-grenade': 'Quick Change',
+  callbacks: 'Callbacks',
+  season: 'Season',
+  encore: 'Encore',
+  callsheet: 'Call Sheet',
+};
+
+const BADGE_PX = 68;                 // how wide a badge picture is on Home
+const HERO_PX = 88;                  // how wide it is at the top of a detail sheet
 const REFRESH_MS = 20 * 1000;        // how often standings are asked for again
-const ALWAYS_TYPES = new Set(['season', 'missions', 'chest']); // always in "Always on"
 const GOLD = '#e0a100';
 const GOLD_DARK = '#a87400';
 const STEEL = '#6f7a8c';
@@ -103,33 +130,37 @@ function ordinal(n) {
   return v + (['th', 'st', 'nd', 'rd'][v % 10] || 'th');
 }
 
-// When the current block of the week ends (local time): the Monday-Thursday
-// block ends as Friday begins, the Friday-Sunday block as Monday begins.
-function blockEnd(now) {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay(); // 0 = Sunday ... 6 = Saturday
-  const daysLeft = day >= 1 && day <= 4 ? 5 - day : (day === 0 ? 1 : 8 - day);
-  d.setDate(d.getDate() + daysLeft);
-  return d.getTime();
+// A big number made short enough for a badge bubble: 950, 1.2k, 5k, 12k.
+function shortNum(n) {
+  const v = Number(n) || 0;
+  if (v >= 10000) return Math.round(v / 1000) + 'k';
+  if (v >= 1000) return (v / 1000).toFixed(1).replace('.0', '') + 'k';
+  return String(v);
 }
 
-// Which heading an event goes under on Home. (docs/EVENTS.md has no field
-// for this, so it is worked out from the type and the end time. If the logic
-// ever sends  group: 'soon' | 'block' | 'always'  that is used instead.)
-function groupOf(ev, now) {
-  if (ev.group === 'soon' || ev.group === 'block' || ev.group === 'always') return ev.group;
-  if (ALWAYS_TYPES.has(ev.type)) return 'always';
-  if (ev.endsAt === null || ev.endsAt === undefined) return ev.state === 'offer' ? 'soon' : 'always';
-  if (ev.endsAt - now <= SOON_MS) return 'soon';
-  if (ev.endsAt > blockEnd(now) + 60000) return 'always'; // outlives this block (the weekly race)
-  return 'block';
+// The name written under an event's badge on Home.
+function shortName(ev) {
+  const key = String(ev.id === undefined || ev.id === null ? '' : ev.id).split('@')[0];
+  return SHORT_NAMES[key] || String(ev.title || 'Event').replace(/^The /, '');
 }
 
-// "This block (Mon-Thu)" or "This block (Fri-Sun)".
-function blockLabel(now) {
-  const day = new Date(now).getDay();
-  return `${TEXT.groups.block} (${day >= 1 && day <= 4 ? 'Mon–Thu' : 'Fri–Sun'})`;
+// The few characters shown in the bubble at the top right of a badge: the
+// player's rank ("12th"), a fraction ("4/7", "6/25") or "✓" when complete.
+// It is read from the event's summary line first ("12th of 50", "step 6/25",
+// "stage 1: 2/3"), then from its progress numbers, then from the player's
+// row in the standings. '' means no bubble.
+function bubbleText(ev) {
+  const summary = String(ev.summary || '');
+  if (/^complete/i.test(summary)) return '✓';
+  const rank = summary.match(/^(?:finished\s+)?(\d+(?:st|nd|rd|th))\b/i);
+  if (rank) return rank[1];
+  const frac = summary.match(/(\d+)\s*\/\s*(\d+)/) || summary.match(/(\d+)\s+of\s+(\d+)/i); // "round 2 of 3"
+  if (frac) return `${shortNum(frac[1])}/${shortNum(frac[2])}`;
+  if (ev.progress && ev.progress.need > 0) return `${shortNum(ev.progress.have)}/${shortNum(ev.progress.need)}`;
+  const you = list(ev.rows).find((r) => r && r.you);
+  if (you && you.place > 0) return ordinal(you.place);
+  const count = summary.match(/^(\d+)\b/); // "3 scrolls" -> "3"
+  return count ? shortNum(count[1]) : '';
 }
 
 // ---- Small pictures ----
@@ -369,7 +400,47 @@ export function createEvents(session, onChange) {
     }
   }
 
-  // ---- Home: banner, two buttons, the event list ----
+  // ---- The round picture badges ----
+  // A badge picture is drawn once and then kept, so the 20-second refresh
+  // (and the once-a-second countdown) never has to paint it again.
+  const badgePics = new Map(); // "event id|type|size" -> its canvas
+  function eventIcon(ev, size, label) {
+    const key = ev.id + '|' + (ev.type || '') + '|' + size;
+    let pic = badgePics.get(key);
+    if (!pic) {
+      if (badgePics.size > 80) badgePics.clear(); // old, finished events: start afresh
+      pic = icon(size, (ctx, s) => drawEventIcon(ctx, ev, s, theme), '');
+      pic.classList.add('ev-b-canvas');
+      badgePics.set(key, pic);
+    }
+    if (label) pic.setAttribute('aria-label', label);
+    return pic;
+  }
+
+  // One badge of the Home grid: the round picture, a short name under it,
+  // then the time left. `o` holds:
+  //   ev      what to draw ({ id, type })      name   the word under the picture
+  //   bubble  text for the top-right bubble    count  true = red number bubble
+  //   start   true = show the pulsing "Start" pill instead of the bubble
+  //   dot     true = show the small red dot    time   the element for the time line
+  //   label   what a screen reader says        onTap  what a tap does
+  function badge(o) {
+    const btn = h('button', 'ev-b' + (o.cls ? ' ' + o.cls : ''));
+    btn.type = 'button';
+    btn.setAttribute('aria-label', o.label || o.name);
+    const pic = h('span', 'ev-b-pic');
+    pic.appendChild(eventIcon(o.ev, BADGE_PX));
+    if (o.start) pic.appendChild(h('span', 'ev-b-start', TEXT.start));
+    else if (o.bubble) pic.appendChild(h('span', 'ev-b-bubble' + (o.count ? ' count' : ''), o.bubble));
+    if (o.dot) pic.appendChild(h('span', 'ev-b-dot'));
+    btn.append(pic, h('span', 'ev-b-name', o.name), o.time || h('span', 'ev-b-time'));
+    btn.onclick = o.onTap;
+    return btn;
+  }
+
+  // ---- Home: the boost banner, then the grid of badges ----
+  // Rewards and the Playbill album come first, then every event in the order
+  // the Session gives them (ending soonest first), four badges across.
   function drawHome() {
     const mount = $('home-events');
     if (!mount) return;
@@ -380,68 +451,61 @@ export function createEvents(session, onChange) {
     drawBoosts(banner, false);
     mount.appendChild(banner);
 
-    // Rewards (with the number waiting) and the album.
-    const bar = h('div', 'ev-bar');
+    const grid = h('div', 'ev-badges');
+
+    // Rewards: the bubble is the number waiting; the time line counts down
+    // to the first one that would expire.
     const tray = getTray(t);
-    const trayBtn = h('button', 'btn ev-bar-btn', TEXT.rewards);
-    trayBtn.type = 'button';
-    if (tray.length) {
-      const badge = h('span', 'ev-badge', tray.length);
-      badge.setAttribute('aria-label', tray.length + ' waiting');
-      trayBtn.appendChild(badge);
-    }
-    trayBtn.onclick = openTray;
-    bar.appendChild(trayBtn);
+    const expiries = tray.map((item) => item && item.expiresAt).filter((v) => typeof v === 'number');
+    grid.appendChild(badge({
+      ev: { id: 'rewards', type: 'tray' },
+      name: TEXT.rewards,
+      bubble: tray.length ? String(tray.length) : '',
+      count: true,
+      time: expiries.length ? countdown(Math.min(...expiries), '', 'ev-b-time')
+        : h('span', 'ev-b-time', tray.length ? TEXT.waiting : ''),
+      label: tray.length ? `${TEXT.rewards}, ${tray.length} waiting` : TEXT.rewards,
+      onTap: openTray,
+    }));
+
+    // The Playbill album: the bubble is cards owned out of all cards.
     const album = getAlbum(t);
     if (album) {
-      const albumBtn = h('button', 'btn ev-bar-btn', TEXT.album);
-      albumBtn.type = 'button';
-      albumBtn.appendChild(h('span', 'ev-count', `${num(album.owned)}/${num(album.total)}`));
-      albumBtn.onclick = openAlbum;
-      bar.appendChild(albumBtn);
+      grid.appendChild(badge({
+        ev: { id: 'album', type: 'album' },
+        name: TEXT.album,
+        bubble: `${shortNum(album.owned)}/${shortNum(album.total)}`,
+        time: countdown(album.endsAt, '', 'ev-b-time'),
+        label: `${TEXT.album}, ${num(album.owned)} of ${num(album.total)} cards`,
+        onTap: openAlbum,
+      }));
     }
-    mount.appendChild(bar);
 
-    // The events, under three headings.
     const events = getEvents(t);
-    if (!events.length) {
-      mount.appendChild(h('p', 'note ev-empty', TEXT.noEvents));
-      return;
-    }
-    const groups = { soon: [], block: [], always: [] };
-    for (const ev of events) groups[groupOf(ev, t)].push(ev);
-    for (const key of ['soon', 'block', 'always']) {
-      if (!groups[key].length) continue;
-      mount.appendChild(h('div', 'label ev-group', key === 'block' ? blockLabel(t) : TEXT.groups[key]));
-      const box = h('div', 'ev-list');
-      for (const ev of groups[key]) box.appendChild(eventRow(ev));
-      mount.appendChild(box);
-    }
+    for (const ev of events) grid.appendChild(eventBadge(ev));
+    mount.appendChild(grid);
+    if (!events.length) mount.appendChild(h('p', 'note ev-empty', TEXT.noEvents));
   }
 
   // The word for a finished state, or '' while an event is still open.
   const stateWord = (state) => ({ won: 'Won', lost: 'Lost', over: 'Ended' }[state] || '');
 
-  // One row of the Home list: title and summary on the left, the time left
-  // (or a Start button) on the right. Tapping the row opens the detail sheet.
-  function eventRow(ev) {
-    const row = h('div', 'ev-item' + (ev.state && ev.state !== 'running' ? ' ' + ev.state : ''));
-    row.setAttribute('role', 'button');
-    row.tabIndex = 0;
-    const left = h('div', 'ev-item-main');
-    left.appendChild(h('div', 'ev-item-title', ev.title || 'Event'));
-    const sub = h('div', 'ev-item-sub');
-    const word = stateWord(ev.state);
-    if (word) sub.appendChild(h('span', 'ev-tag ' + ev.state, word));
-    if (ev.summary) sub.appendChild(h('span', '', ev.summary));
-    left.appendChild(sub);
-    const right = h('div', 'ev-item-side');
-    right.appendChild(countdown(ev.endsAt));
-    if (ev.state === 'offer') right.appendChild(startButton(ev.id));
-    row.append(left, right);
-    row.onclick = () => openDetail(ev.id);
-    row.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(ev.id); } };
-    return row;
+  // The Home badge of one event. Tapping it opens the detail sheet (where
+  // the Start button is, for an event waiting to be started).
+  function eventBadge(ev) {
+    const finished = stateWord(ev.state); // 'Won', 'Lost', 'Ended' or ''
+    return badge({
+      ev,
+      cls: ev.state && ev.state !== 'running' ? ev.state : '',
+      name: shortName(ev),
+      start: ev.state === 'offer',
+      bubble: finished || bubbleText(ev),
+      dot: !!finished || !!ev.claimable, // just finished, or something to collect
+      time: countdown(ev.endsAt, '', 'ev-b-time'),
+      label: [ev.title || 'Event', finished, ev.summary, ev.state === 'offer' ? 'tap to start' : '']
+        .filter(Boolean).join(', '),
+      onTap: () => openDetail(ev.id),
+    });
   }
 
   // The Start button of an event that is on offer.
@@ -507,7 +571,10 @@ export function createEvents(session, onChange) {
     const top = first ? 0 : sheetBody.scrollTop;
     sheetBody.textContent = '';
     const title = safe(() => view.render(sheetBody, now(), first), 'Event');
-    sheetTitle.textContent = title;
+    // An event's sheet shows its title beside its big badge instead (see
+    // openDetail), so the bar at the top is left blank for it.
+    sheetTitle.textContent = view.titleInBody ? '' : title;
+    sheet.setAttribute('aria-label', title);
     sheetBack.style.visibility = view.onBack ? 'visible' : 'hidden';
     sheetBody.scrollTop = top;
     if (first && view.afterOpen) safe(() => view.afterOpen(sheetBody), null);
@@ -651,15 +718,22 @@ export function createEvents(session, onChange) {
   // chests), so every type in docs/EVENTS.md is covered by the same code.
   function openDetail(id) {
     openSheet({
+      titleInBody: true, // the title is written beside the badge, not in the top bar
       render(body, t) {
         const ev = getDetail(id, t);
         if (!ev) {
           body.appendChild(h('p', 'note ev-empty', 'This event is no longer running.'));
           return 'Event';
         }
-        // Top: what it is, how long is left, and Start if it is on offer.
+        // Top: the big badge with the title and what the event is, then how
+        // long is left, and Start if it is on offer.
         const top = h('div', 'ev-top');
-        if (ev.blurb) top.appendChild(h('p', 'note', ev.blurb));
+        const hero = h('div', 'ev-hero');
+        const words = h('div', 'ev-hero-text');
+        words.appendChild(h('h2', 'ev-hero-title', ev.title || 'Event'));
+        if (ev.blurb) words.appendChild(h('p', 'note', ev.blurb));
+        hero.append(eventIcon(ev, HERO_PX), words);
+        top.appendChild(hero);
         const meta = h('div', 'ev-meta');
         const word = stateWord(ev.state);
         if (word) meta.appendChild(h('span', 'ev-tag ' + ev.state, word));
