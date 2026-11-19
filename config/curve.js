@@ -28,7 +28,7 @@ export const CURVE = {
   // ---- How many piece colors ---------------------------------------------
   colors: {
     early: 4, // number of colors on the early levels
-    earlyThroughLevel: 20, // the last level that uses the `early` number
+    earlyThroughLevel: 0, // the last level that uses the `early` number
     later: 5, // number of colors after that
     alwaysLaterFromTier: 2, // tiers this high or higher always use `later`
   },
@@ -683,7 +683,7 @@ export const CURVE = {
   // ---- Moves -------------------------------------------------------------
   // Moves the player gets, per tier. Deliberately generous for now so every
   // level can be won; phase 2's simulator will replace these.
-  baseMoves: [30, 28, 26, 24],
+  baseMoves: [24, 24, 23, 22],
 
   // ---- Obstacles ---------------------------------------------------------
   // What each obstacle is and how it breaks is in config/obstacles.js.
@@ -775,8 +775,8 @@ export const CURVE = {
     // `perSandbag`. The total is rounded and never goes above `cap`.
     // Placeholders, deliberately generous, until the simulator tunes them.
     extraMoves: {
-      perMatchHit: 0.6, // a hit that a normal match can give
-      perPowerHit: 1.5, // a hit that only a power-up can give
+      perMatchHit: 0.5, // a hit that a normal match can give
+      perPowerHit: 1.4, // a hit that only a power-up can give
       perSandbag: 2,
       // Batch 2 (placeholders too):
       perFloorCell: 0.3, // each confetti floor cell
