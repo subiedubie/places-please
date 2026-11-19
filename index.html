@@ -22,18 +22,30 @@
 
   <!-- HOME -->
   <section id="screen-home" class="screen" hidden>
-    <header class="home-top">
-      <h1 id="home-title" class="title">Places, Please</h1>
-    </header>
+    <!-- Home is three columns: side-game badges down the left edge, the level
+         and Play button in the middle, more badges down the right edge.
+         The two badge columns are filled by ui/events.js. -->
+    <div id="home-body" class="home-body">
+    <div id="home-left" class="home-side left"></div>
     <div class="home-mid">
+      <!-- The title. Right after a level, the round banner sits here instead
+           (same box, so nothing below it moves). -->
+      <header class="home-top">
+        <h1 id="home-title" class="title">Places, Please</h1>
+        <div id="home-round" class="home-round" hidden>
+          <div class="home-round-text">
+            <div id="home-round-title" class="home-round-title"></div>
+            <div id="home-round-coins" class="home-round-coins"></div>
+          </div>
+          <!-- Opens the full list of what the level paid (the old Results screen). -->
+          <button id="home-round-details" class="home-round-details" type="button">details</button>
+        </div>
+      </header>
       <div class="card">
         <div id="home-tier" class="label"></div>
         <div id="home-level" class="big"></div>
       </div>
-      <div class="pair">
-        <div class="card"><div class="label">Coins</div><div id="home-coins" class="mid"></div></div>
-        <div class="card"><div class="label">Win streak</div><div id="home-streak" class="mid"></div></div>
-      </div>
+      <div class="card coins-card"><div class="label">Coins</div><div id="home-coins" class="mid"></div></div>
       <!-- The streak gift: what the next level starts with. Hidden when there is none. -->
       <div id="home-gift" class="card gift" hidden>
         <div id="home-gift-label" class="label">Standing Ovation: starts with</div>
@@ -43,9 +55,12 @@
       <!-- Pre-level boosters to switch on for the next level (filled by ui/boosters.js). -->
       <div id="home-boosters" class="card gift" hidden></div>
       <button id="home-play" class="btn primary tall">Play</button>
-      <!-- Side games, the Rewards and album buttons, running boosts (filled by ui/events.js). -->
+      <!-- Timed boosts that are running (filled by ui/events.js). The side-game
+           badges themselves are in #home-left and #home-right. -->
       <div id="home-events"></div>
       <p id="home-reminder" class="note" hidden></p>
+    </div>
+    <div id="home-right" class="home-side right"></div>
     </div>
     <footer class="home-bottom">
       <button id="home-settings" class="btn quiet">Settings</button>
@@ -85,7 +100,8 @@
     </footer>
   </section>
 
-  <!-- RESULTS -->
+  <!-- RESULTS (no longer shown on its own: a level now ends on Home, and the
+       same lines open in a sheet from the banner's "details" link) -->
   <section id="screen-results" class="screen" hidden>
     <div class="results-mid">
       <div id="results-sub" class="label"></div>

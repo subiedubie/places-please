@@ -1,6 +1,6 @@
 // MAIN: ties the screens, the board drawing, the touch input and the saved
-// game together. The order of play is  Home -> Level -> Results -> Home,
-// with Settings reachable from Home.
+// game together. The order of play is  Home -> Level -> Home (which shows
+// what the level earned), with Settings reachable from Home.
 //
 // All the rules and the saving live in the Session object (meta/session.js).
 // This file only asks it things and shows the answers.
@@ -89,7 +89,11 @@ window.addEventListener('resize', refit);
 
 // ---- Moving between screens ----
 
-function goHome() {
+// round: leave out normally. Right after a level it is
+//   { result, levelN, coinsBefore, before }   (see endLevel below)
+// and Home then shows what the level earned: the banner, the coins counting
+// up, and a "+3" on each side-game badge that gained something.
+function goHome(round) {
   onLevel = false;
   const save = session.save;
   const game = session.game;
@@ -102,10 +106,29 @@ function goHome() {
   // progress has had its gift.
   const resuming = Boolean(save.current);
   const gift = !resuming && typeof session.nextGift === 'function' ? session.nextGift() : null;
-  ui.home(save, tier, resuming, gift);
+  // The last try at this level was lost: the button says Retry. (The side
+  // games remember the lost level in the save, so this survives a restart.)
+  const retry = !resuming && Boolean(save.events) && save.events.failedLevel === save.level;
+  ui.home(save, tier, resuming, gift, retry);
   boosters.refreshHome(resuming); // pre-level boosters, and the bonus-level name
-  eventUi.home();
-  ui.show('home');
+  ui.show('home'); // before the badges: they are sized to the height of Home
+  eventUi.home(round ? { result: round.result, before: round.before } : null);
+  if (round) {
+    ui.roundBanner(round.result, round.levelN,
+      () => eventUi.openRound(round.result, round.levelN, (box) => ui.coinLines(round.result, box)));
+    ui.tickCoins(round.coinsBefore, save.coins);
+  }
+}
+
+// A level has ended (won, lost or quit): settle it and go straight back to
+// Home, which shows what it earned. `settle` is session.finish or session.quit.
+function endLevel(settle) {
+  const levelN = session.game.level.n;
+  const coinsBefore = session.save.coins;  // to count the coins card up from
+  const before = eventUi.snapshot();       // what each badge showed before
+  const result = settle();
+  if (!result) { goHome(); return; }
+  goHome({ result, levelN, coinsBefore, before });
 }
 
 function goLevel() {
@@ -114,6 +137,7 @@ function goLevel() {
   busy = false;
   pressed = null;
   onLevel = true;
+  ui.hideRoundBanner(); // the last level's banner on Home, if it is still up
   ui.hud(game);
   boosters.disarm();
   boosters.refreshBar(); // the booster bar under the board
@@ -122,6 +146,9 @@ function goLevel() {
   refit(); // must come after show(): a hidden canvas has no size
 }
 
+// The old stand-alone Results screen. Nothing sends the player here any
+// more (a level ends on Home, see endLevel); it is kept so it can be
+// switched back on by calling it from endLevel.
 function goResults(result, levelN) {
   onLevel = false;
   ui.results(result, levelN);
@@ -179,10 +206,8 @@ async function handleAction(action) {
     if (session.isOver() && session.game.status === 'lost' && await boosters.outOfMoves()) {
       ui.hud(session.game);
     } else if (session.isOver()) {
-      const levelN = session.game.level.n;
       await wait(350); // a moment to see the final board
-      const result = session.finish();
-      goResults(result, levelN);
+      endLevel(() => session.finish()); // settle it and go straight to Home
     }
   } catch (err) {
     console.error(err);
@@ -233,15 +258,14 @@ initHelp({ session }); // the "?" and "How to play" buttons
 $('home-play').onclick = startLevel;
 $('home-settings').onclick = () => goSettings('');
 $('results-next').onclick = startLevel;
-$('results-home').onclick = goHome;
-$('settings-back').onclick = goHome;
+$('results-home').onclick = () => goHome();
+$('settings-back').onclick = () => { ui.hideRoundBanner(); goHome(); };
 
 $('level-quit').onclick = async () => {
   if (busy) return;
   const yes = await ui.confirm('Quit this level? It will count as a loss.', 'Quit level', 'Keep playing');
   if (!yes || busy) return;
-  const levelN = session.game.level.n;
-  goResults(session.quit(), levelN);
+  endLevel(() => session.quit()); // counts as a loss; straight back to Home
 };
 
 $('speed-normal').onclick = () => { session.setSetting('speed', 'normal'); ui.settings(session, ''); };

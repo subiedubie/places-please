@@ -5,10 +5,9 @@
 // giving it more real pixels (devicePixelRatio) and scaling the drawing.
 
 import { get } from '../engine/board.js';
-import { OBSTACLES, DROPPER } from '../config/obstacles.js';
+import { OBSTACLES, OBSTACLES2, DROPPER } from '../config/obstacles.js';
 
 const TAU = Math.PI * 2;
-const SHADE = 'rgba(0, 0, 0, 0.28)';      // darker detail drawn on a piece
 const GLOW = 'rgba(255, 255, 255, 0.45)'; // lighter detail drawn on a piece
 const MAX_CELL = 64;                      // cells never get bigger than this
 const BOARD_PAD = 6;                      // free space kept around the board
@@ -41,6 +40,101 @@ export function layoutFor(canvasW, canvasH, cols, rows) {
     originY: Math.round((canvasH - cell * rows) / 2),
     cell, cols, rows, canvasW, canvasH,
   };
+}
+
+// How much of the tray shows around the lighter square inside each cell.
+function cellGap(cell) {
+  return Math.max(1.5, cell * 0.05);
+}
+
+// ---- The outline of the board. ----
+// A board can have "holes": spots where gems never go. The tray is drawn
+// only under the playable cells, so its edge has to be traced: round the
+// outside of the board AND round every hole inside it.
+//
+// Returns a list of closed loops. Each loop is a list of corner points
+// [x, y], counted in cells from the board's top-left corner.
+function boardLoops(board) {
+  const { cols, rows } = board;
+  const playable = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && get(board, x, y) !== null;
+  // Every side of a playable cell that faces a hole or the outside is one
+  // piece of the edge. Each piece is stored as an arrow from one grid corner
+  // to the next, going clockwise round the playable area.
+  const arrows = new Map(); // "x,y" of a corner -> the arrows that start there
+  const add = (x1, y1, x2, y2) => {
+    const id = x1 + ',' + y1;
+    if (!arrows.has(id)) arrows.set(id, []);
+    arrows.get(id).push({ x1, y1, x2, y2, used: false });
+  };
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (!playable(x, y)) continue;
+      if (!playable(x, y - 1)) add(x, y, x + 1, y);         // top side
+      if (!playable(x + 1, y)) add(x + 1, y, x + 1, y + 1); // right side
+      if (!playable(x, y + 1)) add(x + 1, y + 1, x, y + 1); // bottom side
+      if (!playable(x - 1, y)) add(x, y + 1, x, y);         // left side
+    }
+  }
+  // Join the arrows end to start into loops.
+  const loops = [];
+  for (const list of arrows.values()) {
+    for (const first of list) {
+      if (first.used) continue;
+      const loop = [];
+      let arrow = first;
+      while (arrow && !arrow.used) {
+        arrow.used = true;
+        // A new corner point is needed only where the edge turns.
+        const last = loop[loop.length - 1];
+        const dx = arrow.x2 - arrow.x1;
+        const dy = arrow.y2 - arrow.y1;
+        if (!last || last.dx !== dx || last.dy !== dy) loop.push({ x: arrow.x1, y: arrow.y1, dx, dy });
+        // Where two cells touch only at a corner, two arrows start at the
+        // same point: take the one that turns right, which stays with the
+        // same cell.
+        const next = (arrows.get(arrow.x2 + ',' + arrow.y2) || []).filter((n) => !n.used);
+        arrow = next.find((n) => n.x2 - n.x1 === -dy && n.y2 - n.y1 === dx) || next[0];
+      }
+      // If the loop ends going the same way it began, its first point is
+      // not a real corner.
+      if (loop.length > 1 && loop[0].dx === loop[loop.length - 1].dx && loop[0].dy === loop[loop.length - 1].dy) loop.shift();
+      if (loop.length >= 4) loops.push(loop.map((p) => [p.x, p.y]));
+    }
+  }
+  return loops;
+}
+
+// The loops of the last few board shapes (a shape never changes during a
+// level, and the board is repainted many times a second).
+const loopCache = new Map();
+function loopsFor(board) {
+  let id = board.cols + 'x' + board.rows + ':';
+  for (let y = 0; y < board.rows; y++) {
+    for (let x = 0; x < board.cols; x++) id += get(board, x, y) === null ? '0' : '1';
+  }
+  let loops = loopCache.get(id);
+  if (!loops) {
+    if (loopCache.size > 20) loopCache.clear();
+    loops = boardLoops(board);
+    loopCache.set(id, loops);
+  }
+  return loops;
+}
+
+// Trace the whole edge of the tray as one path, with every corner rounded.
+function traceTray(ctx, board, layout) {
+  const { originX, originY, cell } = layout;
+  const r = cell * 0.2; // how round the corners are
+  ctx.beginPath();
+  for (const loop of loopsFor(board)) {
+    const n = loop.length;
+    const px = (i) => originX + loop[(i + n) % n][0] * cell;
+    const py = (i) => originY + loop[(i + n) % n][1] * cell;
+    // Start halfway along the last side, then round each corner in turn.
+    ctx.moveTo((px(-1) + px(0)) / 2, (py(-1) + py(0)) / 2);
+    for (let i = 0; i < n; i++) ctx.arcTo(px(i), py(i), px(i + 1), py(i + 1), r);
+    ctx.closePath();
+  }
 }
 
 // A rectangle with rounded corners (written out because older phones lack
@@ -85,16 +179,17 @@ const GEMS = {
   },
   // Ruby: a square with cut corners (a "cushion" cut).
   ruby: {
-    outline: [[-0.58, -0.92], [0.58, -0.92], [0.92, -0.58], [0.92, 0.58],
-      [0.58, 0.92], [-0.58, 0.92], [-0.92, 0.58], [-0.92, -0.58]],
+    outline: [[-0.66, -0.9], [0.66, -0.9], [0.9, -0.66], [0.9, 0.66],
+      [0.66, 0.9], [-0.66, 0.9], [-0.9, 0.66], [-0.9, -0.66]],
     shrink: 0.55, cy: 0, glint: [-0.22, -0.24],
   },
-  // Sapphire: round (a "brilliant" cut), with many small facets.
-  sapphire: { outline: ringPoints(16, 0.98), shrink: 0.55, cy: 0, glint: [-0.22, -0.24] },
-  // Emerald: a tall rectangle with cut corners and a ring of steps.
+  // Sapphire: round (a "brilliant" cut). Twelve facets: enough to look
+  // round, few enough to stay clean on a small phone cell.
+  sapphire: { outline: ringPoints(12, 0.98), shrink: 0.55, cy: 0, glint: [-0.22, -0.24] },
+  // Emerald: tall and narrow with long cut corners, and a ring of steps.
   emerald: {
-    outline: [[-0.42, -1], [0.42, -1], [0.7, -0.72], [0.7, 0.72],
-      [0.42, 1], [-0.42, 1], [-0.7, 0.72], [-0.7, -0.72]],
+    outline: [[-0.34, -1], [0.34, -1], [0.68, -0.62], [0.68, 0.62],
+      [0.34, 1], [-0.34, 1], [-0.68, 0.62], [-0.68, -0.62]],
     shrink: 0.5, cy: 0, steps: [0.76], glint: [-0.14, -0.3],
   },
   // Amethyst: a kite, pointed top and bottom.
@@ -127,10 +222,10 @@ function gemLook(name, color) {
   if (!look) {
     look = {
       facets: GEMS[name].light.map((l) => (l >= 0
-        ? mixColor(color, '#ffffff', 0.55 * l)
-        : mixColor(color, '#000000', 0.42 * -l))),
-      table: mixColor(color, '#ffffff', 0.14),
-      edge: mixColor(color, '#000000', 0.5),
+        ? mixColor(color, '#ffffff', 0.6 * l)
+        : mixColor(color, '#000000', 0.4 * -l))),
+      table: mixColor(color, '#ffffff', 0.16),
+      edge: mixColor(color, '#000000', 0.62),
     };
     gemLooks.set(id, look);
   }
@@ -144,14 +239,24 @@ function polygon(ctx, pts, r) {
   ctx.closePath();
 }
 
-// Draw one gem around (0, 0).
-function drawGem(ctx, name, r, color) {
+// Draw one gem around (0, 0). `small` = true for the little gem markers drawn
+// on obstacles: no shadow underneath.
+function drawGem(ctx, name, r, color, small) {
   const gem = GEMS[name];
   const look = gemLook(name, color);
   const out = gem.outline;
   const tab = gem.table;
   const n = out.length;
   ctx.lineJoin = 'round';
+  // A soft shadow just under the gem lifts it off the cell.
+  if (!small) {
+    ctx.save();
+    ctx.translate(0, r * 0.12);
+    ctx.fillStyle = 'rgba(20, 28, 55, 0.3)';
+    polygon(ctx, out, r * 1.05);
+    ctx.fill();
+    ctx.restore();
+  }
   // The facets: one flat four-sided strip per edge of the outline.
   ctx.lineWidth = 0.6;
   for (let i = 0; i < n; i++) {
@@ -171,36 +276,39 @@ function drawGem(ctx, name, r, color) {
   ctx.fillStyle = look.table;
   polygon(ctx, tab, r);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-  ctx.lineWidth = Math.max(0.75, r * 0.05);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.lineWidth = Math.max(0.9, r * 0.07);
   ctx.stroke();
-  for (const ring of gem.rings) { // the steps of a step cut
-    polygon(ctx, ring, r);
-    ctx.stroke();
+  if (!small) {
+    for (const ring of gem.rings) { // the steps of a step cut
+      polygon(ctx, ring, r);
+      ctx.stroke();
+    }
   }
-  // A thin dark outline, so the gem stays crisp on a white cell.
+  // The dark outline, the same weight on every gem (about 2 px on a phone),
+  // in a dark shade of the gem's own color.
   ctx.strokeStyle = look.edge;
-  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.lineWidth = Math.max(1, r * 0.13);
   polygon(ctx, out, r);
   ctx.stroke();
-  // One small white glint.
-  sparkle(ctx, gem.glint[0] * r, gem.glint[1] * r, 0.22 * r, '#ffffff');
+  // One small white glint, always toward the top left (where the light is).
+  sparkle(ctx, gem.glint[0] * r, gem.glint[1] * r, 0.24 * r, '#ffffff');
 }
 
 const SHAPES = {
-  topaz: (ctx, r, color) => drawGem(ctx, 'topaz', r, color),
-  ruby: (ctx, r, color) => drawGem(ctx, 'ruby', r, color),
-  sapphire: (ctx, r, color) => drawGem(ctx, 'sapphire', r, color),
-  emerald: (ctx, r, color) => drawGem(ctx, 'emerald', r, color),
-  amethyst: (ctx, r, color) => drawGem(ctx, 'amethyst', r, color),
+  topaz: (ctx, r, color, small) => drawGem(ctx, 'topaz', r, color, small),
+  ruby: (ctx, r, color, small) => drawGem(ctx, 'ruby', r, color, small),
+  sapphire: (ctx, r, color, small) => drawGem(ctx, 'sapphire', r, color, small),
+  emerald: (ctx, r, color, small) => drawGem(ctx, 'emerald', r, color, small),
+  amethyst: (ctx, r, color, small) => drawGem(ctx, 'amethyst', r, color, small),
   // The names the pieces had before they were gems, so an older theme file
   // still draws something sensible.
-  mask: (ctx, r, color) => drawGem(ctx, 'topaz', r, color),
-  quill: (ctx, r, color) => drawGem(ctx, 'sapphire', r, color),
-  lantern: (ctx, r, color) => drawGem(ctx, 'emerald', r, color),
-  fan: (ctx, r, color) => drawGem(ctx, 'amethyst', r, color),
+  mask: (ctx, r, color, small) => drawGem(ctx, 'topaz', r, color, small),
+  quill: (ctx, r, color, small) => drawGem(ctx, 'sapphire', r, color, small),
+  lantern: (ctx, r, color, small) => drawGem(ctx, 'emerald', r, color, small),
+  fan: (ctx, r, color, small) => drawGem(ctx, 'amethyst', r, color, small),
 
-  rose: (ctx, r, color) => drawGem(ctx, 'ruby', r, color),
+  rose: (ctx, r, color, small) => drawGem(ctx, 'ruby', r, color, small),
 };
 
 // Draw one ordinary piece (a gem) centered at (cx, cy). `size` is the width
@@ -243,11 +351,11 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
     ctx.fillStyle = pc.tile;
     roundRect(ctx, -t / 2, -t / 2, t, t, size * 0.2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; // the bright middle of the tile
-    dot(ctx, 0, 0, t * 0.36);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)'; // the bright middle of the tile
+    dot(ctx, 0, 0, t * 0.4);
     if (pc.tileEdge) {
       ctx.strokeStyle = pc.tileEdge;
-      ctx.lineWidth = Math.max(1, size * 0.045);
+      ctx.lineWidth = Math.max(1.5, size * 0.055); // about 2 px, like every outline
       roundRect(ctx, -t / 2, -t / 2, t, t, size * 0.2);
       ctx.stroke();
     }
@@ -266,11 +374,11 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
     polygon(ctx, [[-1.04, 0], [-0.36, -0.7], [-0.36, -0.3], [0.36, -0.3], [0.36, -0.7], [1.04, 0]], r);
     ctx.fill();
     ctx.strokeStyle = pc.missileEdge || ink;
-    ctx.lineWidth = Math.max(1, r * 0.11);
+    ctx.lineWidth = Math.max(1, r * 0.13);
     polygon(ctx, arrow, r);
     ctx.stroke();
     ctx.fillStyle = '#ffffff'; // a white band round the middle
-    ctx.fillRect(-0.09 * r, -0.3 * r, 0.18 * r, 0.6 * r);
+    ctx.fillRect(-0.11 * r, -0.24 * r, 0.22 * r, 0.48 * r);
   } else if (kind === 'under') {
     // Ninja Star: four steel blades, each half light and half dark, and a
     // colored middle.
@@ -292,7 +400,7 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
       }
     }
     ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1, r * 0.1);
+    ctx.lineWidth = Math.max(1, r * 0.13);
     ctx.beginPath();
     for (let i = 0; i < 8; i++) {
       const rad = i % 2 === 0 ? tip : waist;
@@ -302,7 +410,7 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
     ctx.closePath();
     ctx.stroke();
     ctx.fillStyle = pc.starCentre || '#e5383b';
-    dot(ctx, 0, 0, 0.24 * r);
+    dot(ctx, 0, 0, 0.26 * r);
     ctx.stroke(); // (dot() left its circle as the current path)
   } else if (kind === 'show') {
     // Grenade: a round black bomb with a shine, a short fuse and a spark.
@@ -321,9 +429,9 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
     ctx.rotate(0.5);
     ctx.fillRect(-0.24 * r, -0.13 * r, 0.48 * r, 0.26 * r);
     ctx.restore();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)'; // the shine
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // the shine, top left
     ctx.beginPath();
-    ctx.ellipse(-0.36 * r, -0.14 * r, 0.2 * r, 0.3 * r, 0.6, 0, TAU);
+    ctx.ellipse(-0.38 * r, -0.16 * r, 0.17 * r, 0.3 * r, 0.6, 0, TAU);
     ctx.fill();
     sparkle(ctx, 0.76 * r, -0.8 * r, 0.36 * r, pc.spark || '#ff8a00'); // the spark
     sparkle(ctx, 0.76 * r, -0.8 * r, 0.18 * r, '#fff3a0');
@@ -373,7 +481,7 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1, 0.1 * r);
+    ctx.lineWidth = Math.max(1, 0.13 * r);
     ctx.beginPath();
     ctx.arc(0, 0, R, 0, TAU);
     ctx.stroke();
@@ -430,239 +538,371 @@ function dot(ctx, x, y, r) {
   ctx.fill();
 }
 
-const BLOCKS = {
-  // Crate: a square wooden box with a dark frame, two slats and a brace.
-  crate(ctx, u, oc) {
-    ctx.fillStyle = oc.wood;
-    roundRect(ctx, -u, -u, 2 * u, 2 * u, 0.14 * u);
-    ctx.fill();
-    ctx.strokeStyle = oc.woodDark;
-    ctx.lineWidth = 0.16 * u;
-    roundRect(ctx, -0.92 * u, -0.92 * u, 1.84 * u, 1.84 * u, 0.1 * u);
+// ---- Helpers every obstacle drawing shares. ----
+// The house style: one bold shape that nearly fills the cell, a dark outline
+// about 2 px wide in a darker shade of the object's own color, a few flat
+// colors, one highlight toward the top left. No thin lines: they turn to
+// mush on a phone.
+
+// How thick an obstacle's outline is: about 2 px on a phone cell.
+function edgeW(u) {
+  return Math.max(1.5, u * 0.13);
+}
+
+// A darker shade of a "#rrggbb" color, used for outlines (remembered,
+// because the board is repainted many times a second).
+const darkShades = new Map();
+function dark(color, amount = 0.55) {
+  const id = color + '|' + amount;
+  let shade = darkShades.get(id);
+  if (!shade) {
+    shade = mixColor(color, '#000000', amount);
+    darkShades.set(id, shade);
+  }
+  return shade;
+}
+
+// Fill the shape that was just traced, then draw its outline.
+// Leave out `stroke` for no outline; pass null as `fill` for outline only.
+function ink(ctx, fill, stroke, lw) {
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+
+// A rounded box, filled and outlined.
+function box(ctx, x, y, w, h, r, fill, stroke, lw) {
+  roundRect(ctx, x, y, w, h, r);
+  ink(ctx, fill, stroke, lw);
+}
+
+// A circle, filled and outlined.
+function disc(ctx, x, y, r, fill, stroke, lw) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ink(ctx, fill, stroke, lw);
+}
+
+// A closed shape through [x, y] points (stretched by sx and sy), filled and outlined.
+function poly(ctx, pts, sx, sy, fill, stroke, lw) {
+  ctx.beginPath();
+  for (const [x, y] of pts) ctx.lineTo(x * sx, y * sy);
+  ctx.closePath();
+  ink(ctx, fill, stroke, lw);
+}
+
+// Several overlapping circles drawn as ONE lump with one outline around the
+// lot (a bush, a heap of popcorn). Each circle is [x, y, radius].
+function lump(ctx, circles, sx, sy, fill, stroke, lw) {
+  for (const [x, y, r] of circles) disc(ctx, x * sx, y * sy, r * sx + lw, stroke);
+  for (const [x, y, r] of circles) disc(ctx, x * sx, y * sy, r * sx, fill);
+}
+
+// A thick line with an outline: drawn twice, wide and dark, then narrower in color.
+function pipe(ctx, trace, width, fill, stroke, lw) {
+  ctx.lineCap = 'round';
+  for (const [color, w] of [[stroke, width + lw * 2], [fill, width]]) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    trace();
     ctx.stroke();
-    ctx.lineWidth = 0.07 * u;
-    line(ctx, -0.84 * u, -0.3 * u, 0.84 * u, -0.3 * u);
-    line(ctx, -0.84 * u, 0.3 * u, 0.84 * u, 0.3 * u);
-    ctx.lineWidth = 0.14 * u;
-    line(ctx, -0.8 * u, 0.8 * u, 0.8 * u, -0.8 * u);
+  }
+}
+
+// A five-point star around (x, y).
+function star5(ctx, x, y, r, fill, stroke, lw) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.46;
+    const a = (i * Math.PI) / 5 - Math.PI / 2;
+    ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+  }
+  ctx.closePath();
+  ink(ctx, fill, stroke, lw);
+}
+
+// One big crack: a fat pale zigzag with a dark line down its middle, so it
+// shows on dark and light obstacles alike. `pale` is the color of the fat
+// part (white unless something should glow through the crack).
+function crack(ctx, pts, sx, sy, u, pale) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const [color, width] of [[pale || '#ffffff', 0.36], ['#1b2030', 0.15]]) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width * u;
+    ctx.beginPath();
+    for (const [px, py] of pts) ctx.lineTo(px * sx, py * sy);
+    ctx.stroke();
+  }
+}
+
+// THE "HITS LEFT" BADGE: a dark circle with a white number. Drawn at the
+// bottom right of an obstacle whenever it needs more than one more hit.
+function hitBadge(ctx, x, y, r, n, oc) {
+  disc(ctx, x, y, r, oc.badge || '#1b2030', oc.badgeText || '#ffffff', Math.max(1, r * 0.2));
+  ctx.fillStyle = oc.badgeText || '#ffffff';
+  ctx.font = 'bold ' + (r * 1.55).toFixed(1) + 'px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(n), x, y + r * 0.1);
+}
+
+// THE "POWER-UPS ONLY" BADGE: a gold circle with a dark lightning bolt.
+// Drawn at the top left of an obstacle while its next hit must come from a
+// power-up (a match next to it would do nothing).
+function powerMark(ctx, x, y, r, oc) {
+  disc(ctx, x, y, r, oc.gold || '#ffc400', oc.badge || '#1b2030', Math.max(1, r * 0.2));
+  ctx.fillStyle = oc.badge || '#1b2030';
+  ctx.beginPath();
+  for (const [bx, by] of [[0.22, -0.78], [-0.52, 0.14], [-0.06, 0.14], [-0.22, 0.78], [0.52, -0.14], [0.06, -0.14]]) {
+    ctx.lineTo(x + bx * r, y + by * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+// THE "HOW FAR ALONG" BADGE of the two obstacles that never break (Top Hat,
+// Popcorn Cart): a white circle cut in three, with one slice turned gold
+// for each match already made toward the next dove or popcorn.
+function pieBadge(ctx, x, y, r, n, oc) {
+  disc(ctx, x, y, r, '#ffffff');
+  for (let i = 0; i < 3; i++) {
+    const from = -Math.PI / 2 + (i * TAU) / 3;
+    ctx.fillStyle = i < n ? (oc.gold || '#ffc400') : '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y, r, from, from + TAU / 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = oc.badge || '#1b2030'; // the cuts between the slices
+    ctx.lineWidth = Math.max(1, r * 0.16);
+    ctx.stroke();
+  }
+  disc(ctx, x, y, r, null, oc.badge || '#1b2030', Math.max(1, r * 0.2));
+}
+
+// THE "MATCH THIS COLOR" MARKER: the gem itself, in its own color and
+// shape, on a white disc. Used by every obstacle that needs one color.
+function gemMark(ctx, x, y, r, colorIndex, theme, rim) {
+  disc(ctx, x, y, r, '#ffffff', rim, Math.max(1, r * 0.16));
+  const info = theme.pieces[colorIndex];
+  if (!info) return;
+  ctx.save();
+  ctx.translate(x, y);
+  (SHAPES[info.shape] || SHAPES.rose)(ctx, r * 0.74, info.color, true);
+  ctx.restore();
+}
+
+// Each drawing below gets one "o" object:
+//   u      the unit: 0.42 of one cell, so -u..u spans about 85% of the cell
+//   a, b   half the width and half the height of the area the obstacle covers
+//          (the same as u for a one-cell obstacle; bigger for a big block)
+//   lw     the outline width (edgeW above)
+//   oc     obstacleColors from config/theme.js
+//   cell   the board cell (for color, colors, count, open)
+//   theme  the theme (for the gem colors and shapes)
+//   plain  true for the small target picture: draw it whole and new
+//   hp     hits still needed          taken  hits already landed
+// Everything is drawn around (0, 0), the middle of the area.
+const BLOCKS = {
+  // Crate: a pale wooden box: a wide frame, a darker middle panel and one
+  // fat diagonal plank across it.
+  crate(ctx, { u, oc, lw }) {
+    box(ctx, -0.96 * u, -0.96 * u, 1.92 * u, 1.92 * u, 0.16 * u, oc.wood, dark(oc.woodDark, 0.3), lw);
+    box(ctx, -0.58 * u, -0.58 * u, 1.16 * u, 1.16 * u, 0.06 * u, oc.crateFrame);
+    ctx.save(); // the plank, kept inside the middle panel
+    ctx.clip();
+    ctx.strokeStyle = oc.wood;
+    ctx.lineWidth = 0.34 * u;
+    line(ctx, -0.7 * u, 0.7 * u, 0.7 * u, -0.7 * u);
+    ctx.restore();
+    box(ctx, -0.74 * u, -0.8 * u, 1.1 * u, 0.13 * u, 0.06 * u, GLOW); // the highlight
   },
 
   // Hatbox: a striped round box seen from the side, with a wider lid and a knob.
-  hatbox(ctx, u, oc) {
-    ctx.fillStyle = oc.hatbox;
-    roundRect(ctx, -0.8 * u, -0.3 * u, 1.6 * u, 1.25 * u, 0.12 * u);
-    ctx.fill();
-    ctx.save(); // keep the stripes inside the body
+  // 2 hits. New: the pink lid is on. After the first hit: the lid is gone
+  // and you look into the dark open box.
+  hatbox(ctx, { u, oc, lw, taken }) {
+    const edge = oc.hatBlack;
+    box(ctx, -0.84 * u, -0.26 * u, 1.68 * u, 1.22 * u, 0.2 * u, oc.hatWhite, edge, lw);
+    ctx.save(); // three fat black stripes, kept inside the body
     ctx.clip();
-    ctx.fillStyle = oc.hatStripe;
-    for (const c of [-0.5, 0, 0.5]) ctx.fillRect((c - 0.11) * u, -0.3 * u, 0.22 * u, 1.25 * u);
+    ctx.fillStyle = oc.hatBlack;
+    for (const c of [-0.56, 0, 0.56]) ctx.fillRect((c - 0.14) * u, -0.3 * u, 0.28 * u, 1.3 * u);
     ctx.restore();
-    ctx.strokeStyle = oc.hatStripe;
-    ctx.lineWidth = 0.06 * u;
-    roundRect(ctx, -0.8 * u, -0.3 * u, 1.6 * u, 1.25 * u, 0.12 * u);
-    ctx.stroke();
-    ctx.fillStyle = oc.hatStripe;
-    roundRect(ctx, -0.95 * u, -0.62 * u, 1.9 * u, 0.42 * u, 0.12 * u);
-    ctx.fill();
-    dot(ctx, 0, -0.72 * u, 0.17 * u);
-  },
-
-  // Trunk: a wide dark travel trunk with a handle, two straps and a brass latch.
-  trunk(ctx, u, oc) {
-    ctx.strokeStyle = oc.trunk;
-    ctx.lineWidth = 0.12 * u;
-    ctx.beginPath();
-    ctx.arc(0, -0.62 * u, 0.3 * u, Math.PI, 0); // the handle on top
-    ctx.stroke();
-    ctx.fillStyle = oc.trunk;
-    roundRect(ctx, -u, -0.62 * u, 2 * u, 1.5 * u, 0.16 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.strap;
-    ctx.fillRect(-0.64 * u, -0.62 * u, 0.22 * u, 1.5 * u);
-    ctx.fillRect(0.42 * u, -0.62 * u, 0.22 * u, 1.5 * u);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)'; // where the lid meets the body
-    ctx.lineWidth = 0.07 * u;
-    line(ctx, -u, -0.12 * u, u, -0.12 * u);
-    ctx.fillStyle = oc.brass;
-    roundRect(ctx, -0.15 * u, -0.26 * u, 0.3 * u, 0.36 * u, 0.05 * u);
-    ctx.fill();
-  },
-
-  // Paint Can: a can filled with one piece color, with that piece's shape
-  // in white on the front, so it is clear which color match opens it.
-  paint(ctx, u, oc, cell, theme) {
-    const info = theme.pieces[cell.color];
-    ctx.strokeStyle = oc.tin;
-    ctx.lineWidth = 0.1 * u;
-    ctx.beginPath();
-    ctx.arc(0, -0.5 * u, 0.5 * u, Math.PI, 0); // the wire handle
-    ctx.stroke();
-    ctx.fillStyle = info ? info.color : oc.paintNone;
-    roundRect(ctx, -0.72 * u, -0.5 * u, 1.44 * u, 1.42 * u, 0.1 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.tin; // metal rims top and bottom
-    ctx.fillRect(-0.8 * u, -0.56 * u, 1.6 * u, 0.2 * u);
-    ctx.fillRect(-0.76 * u, 0.78 * u, 1.52 * u, 0.16 * u);
-    if (info) {
-      ctx.save();
-      ctx.translate(0, 0.21 * u);
-      (SHAPES[info.shape] || SHAPES.rose)(ctx, 0.36 * u, '#ffffff');
-      ctx.restore();
+    if (taken > 0) {
+      // Open: a dark oval mouth with a pink rim where the lid used to sit.
+      ctx.beginPath();
+      ctx.ellipse(0, -0.24 * u, 0.84 * u, 0.3 * u, 0, 0, TAU);
+      ink(ctx, oc.safeInside, dark(oc.hatLid, 0.35), lw);
+      return;
     }
+    box(ctx, -0.98 * u, -0.66 * u, 1.96 * u, 0.56 * u, 0.16 * u, oc.hatLid, dark(oc.hatLid), lw);
+    box(ctx, -0.74 * u, -0.56 * u, 0.8 * u, 0.12 * u, 0.06 * u, GLOW);
+    disc(ctx, 0, -0.76 * u, 0.2 * u, oc.hatLid, dark(oc.hatLid), lw); // the knob
   },
 
-  // Dry Ice: a pale blue frosted block with white shine marks and a frost star.
-  dryice(ctx, u, oc) {
-    ctx.fillStyle = oc.ice;
-    roundRect(ctx, -0.9 * u, -0.9 * u, 1.8 * u, 1.8 * u, 0.22 * u);
-    ctx.fill();
-    ctx.strokeStyle = oc.iceEdge;
-    ctx.lineWidth = 0.1 * u;
-    ctx.stroke();
+  // Trunk: a dark brown travel trunk with a rounded lid, pale straps and a
+  // brass latch. 3 hits: each hit snaps one strap, and the last one left
+  // shows a crack.
+  trunk(ctx, { u, oc, lw, hp, taken }) {
+    const edge = dark(oc.trunk, 0.6);
+    box(ctx, -0.98 * u, -0.8 * u, 1.96 * u, 1.74 * u, 0.34 * u, oc.trunk, edge, lw);
+    ctx.save(); // keep the lid line and the straps inside the trunk
+    ctx.clip();
+    ctx.fillStyle = oc.trunkDark; // where the lid closes
+    ctx.fillRect(-u, -0.2 * u, 2 * u, 0.16 * u);
+    ctx.fillStyle = GLOW;         // the highlight along the top of the lid
+    ctx.fillRect(-0.66 * u, -0.66 * u, 0.9 * u, 0.13 * u);
+    const straps = Math.max(0, hp - 1); // 2 when new, then 1, then none
+    ctx.fillStyle = oc.strap;
+    if (straps >= 1) ctx.fillRect(-0.68 * u, -u, 0.3 * u, 2 * u);
+    if (straps >= 2) ctx.fillRect(0.38 * u, -u, 0.3 * u, 2 * u);
+    ctx.restore();
+    box(ctx, -0.98 * u, -0.8 * u, 1.96 * u, 1.74 * u, 0.34 * u, null, edge, lw);
+    box(ctx, -0.2 * u, -0.38 * u, 0.4 * u, 0.5 * u, 0.08 * u, oc.brass, dark(oc.brass), lw * 0.8); // the latch
+    if (taken >= 2) crack(ctx, [[0.9, -0.5], [0.42, -0.1], [0.62, 0.26], [0.2, 0.8]], u, u, u);
+  },
+
+  // Paint Can: a tin of paint in ONE gem color, with that gem on its white
+  // label. Only a match of that color (or a power-up) opens it.
+  paint(ctx, { u, oc, lw, cell, theme }) {
+    const info = theme.pieces[cell.color];
+    const color = info ? info.color : oc.paintNone;
+    const edge = dark(color, 0.6);
+    pipe(ctx, () => ctx.arc(0, -0.5 * u, 0.56 * u, Math.PI, 0), 0.1 * u, oc.tin, dark(oc.shackle, 0.4), lw * 0.6); // the wire handle
+    box(ctx, -0.8 * u, -0.46 * u, 1.6 * u, 1.42 * u, 0.16 * u, color, edge, lw);
+    box(ctx, -0.92 * u, -0.62 * u, 1.84 * u, 0.32 * u, 0.1 * u, oc.tin, dark(oc.shackle, 0.4), lw); // the metal rim
+    if (info) gemMark(ctx, 0, 0.3 * u, 0.56 * u, cell.color, theme, edge);
+    else disc(ctx, 0, 0.3 * u, 0.5 * u, '#ffffff', edge, lw * 0.7);
+  },
+
+  // Dry Ice: a bright icy block with a pale face, two fat white shine
+  // marks, and white fog curling off the bottom.
+  dryice(ctx, { u, oc, lw }) {
+    box(ctx, -0.94 * u, -0.96 * u, 1.88 * u, 1.8 * u, 0.26 * u, oc.iceBody, oc.iceLine, lw);
+    box(ctx, -0.62 * u, -0.64 * u, 1.24 * u, 1.16 * u, 0.14 * u, oc.iceLight);
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 0.14 * u;
-    line(ctx, -0.55 * u, -0.2 * u, -0.2 * u, -0.55 * u);
-    line(ctx, -0.55 * u, 0.25 * u, 0.25 * u, -0.55 * u);
-    ctx.strokeStyle = oc.iceEdge;
-    ctx.lineWidth = 0.07 * u;
-    for (let i = 0; i < 3; i++) {
-      const a = (i * Math.PI) / 3;
-      const dx = Math.cos(a) * 0.28 * u;
-      const dy = Math.sin(a) * 0.28 * u;
-      line(ctx, 0.36 * u - dx, 0.36 * u - dy, 0.36 * u + dx, 0.36 * u + dy);
-    }
+    ctx.lineWidth = 0.2 * u;
+    line(ctx, -0.36 * u, -0.1 * u, -0.06 * u, -0.4 * u);
+    line(ctx, -0.36 * u, 0.3 * u, 0.34 * u, -0.4 * u);
+    // The fog: one white lump along the bottom edge.
+    lump(ctx, [[-0.62, 0.8, 0.22], [-0.2, 0.86, 0.26], [0.26, 0.82, 0.24], [0.66, 0.86, 0.2]],
+      u, u, '#ffffff', oc.iceLine, lw * 0.7);
   },
 
-  // Cash Box: a low steel box with a handle, a coin slot on top and a coin on the front.
-  cashbox(ctx, u, oc) {
-    ctx.strokeStyle = oc.cashbox;
-    ctx.lineWidth = 0.1 * u;
+  // Cash Box: a steel-blue money box with a big gold coin dropping into the
+  // slot on top and a round lock on the front. Power-ups only.
+  cashbox(ctx, { u, oc, lw }) {
+    const edge = dark(oc.cashbox, 0.62);
+    disc(ctx, 0.3 * u, -0.46 * u, 0.48 * u, oc.brass, dark(oc.brass), lw); // the coin
+    disc(ctx, 0.3 * u, -0.46 * u, 0.24 * u, oc.gold);
+    box(ctx, -0.96 * u, -0.36 * u, 1.92 * u, 1.32 * u, 0.18 * u, oc.cashbox, edge, lw);
+    ctx.fillStyle = edge;                                                // the coin slot
+    ctx.fillRect(-0.6 * u, -0.36 * u, 1.2 * u, 0.14 * u);
+    box(ctx, -0.7 * u, -0.1 * u, 0.9 * u, 0.13 * u, 0.06 * u, GLOW);     // the highlight
+    disc(ctx, 0, 0.44 * u, 0.3 * u, oc.brass, edge, lw * 0.8);           // the lock
+    disc(ctx, 0, 0.44 * u, 0.1 * u, edge);
+  },
+
+  // Scenery Flat: a piece of stage wall, built of seven big pale stone
+  // blocks with dark gaps between them. Power-ups only, 3 hits: each hit
+  // knocks one block out of the wall.
+  flat(ctx, { u, oc, lw, taken }) {
+    box(ctx, -0.97 * u, -0.97 * u, 1.94 * u, 1.94 * u, 0.14 * u, oc.stoneGap, oc.stoneGap, lw);
+    const e = 0.86 * u;             // half the width of the wall
+    const gap = 0.13 * u;           // the dark gap between blocks
+    const h = (2 * e - 2 * gap) / 3; // three rows
+    // Each block: [row, left edge, right edge] with the edges from -1 to 1.
+    const blocks = [
+      [0, -1, -0.08], [0, 0.08, 1],
+      [1, -1, -0.56], [1, -0.4, 0.4], [1, 0.56, 1],
+      [2, -1, -0.08], [2, 0.08, 1],
+    ];
+    const gone = [1, 5, 3].slice(0, taken); // which blocks have been knocked out
+    blocks.forEach(([row, x1, x2], i) => {
+      if (gone.includes(i)) return;
+      const y = -e + row * (h + gap);
+      box(ctx, x1 * e, y, (x2 - x1) * e, h, 0.07 * u, oc.stone);
+      box(ctx, x1 * e, y, (x2 - x1) * e, h * 0.36, 0.07 * u, oc.stoneLight); // its lit top
+    });
+  },
+
+  // Strongbox: a near-black safe with a big brass dial. First a power-up
+  // must blow the door open (then you see the gold inside); after that one
+  // match next to it finishes it.
+  strongbox(ctx, { u, oc, lw, taken }) {
+    const edge = dark(oc.safe, 0.7);
+    box(ctx, -0.97 * u, -0.97 * u, 1.94 * u, 1.94 * u, 0.2 * u, oc.safe, edge, lw);
+    if (taken > 0) {
+      // Open: the dark inside, three gold bars, and the door swung to the right.
+      box(ctx, -0.72 * u, -0.72 * u, 1.3 * u, 1.44 * u, 0.1 * u, oc.safeInside);
+      for (const [x, y] of [[-0.58, 0.3], [-0.06, 0.3], [-0.32, -0.08]]) {
+        box(ctx, x * u, y * u, 0.5 * u, 0.34 * u, 0.06 * u, oc.gold, dark(oc.brass), lw * 0.6);
+      }
+      box(ctx, 0.6 * u, -0.9 * u, 0.3 * u, 1.8 * u, 0.1 * u, oc.safeDoor, edge, lw * 0.8);
+      return;
+    }
+    box(ctx, -0.72 * u, -0.72 * u, 1.44 * u, 1.44 * u, 0.12 * u, oc.safeDoor);
+    box(ctx, -0.56 * u, -0.6 * u, 0.7 * u, 0.12 * u, 0.06 * u, GLOW);    // the highlight
+    disc(ctx, 0, 0.04 * u, 0.44 * u, oc.brass, edge, lw);                // the dial
+    disc(ctx, 0, 0.04 * u, 0.16 * u, oc.safe);
+    ctx.fillStyle = oc.safe;                                             // its pointer
+    ctx.fillRect(-0.06 * u, -0.38 * u, 0.12 * u, 0.26 * u);
+  },
+
+  // Costume Bag: a round teal pouch pulled shut with a gold cord, with a
+  // big gold star on the front (there is a power-up inside). 3 hits: each
+  // hit rips the bag, and gold light shows through the rip.
+  costume(ctx, { u, oc, lw, taken }) {
+    const edge = dark(oc.bag, 0.6);
     ctx.beginPath();
-    ctx.arc(0, -0.42 * u, 0.26 * u, Math.PI, 0); // the handle
-    ctx.stroke();
-    ctx.fillStyle = oc.cashbox;
-    roundRect(ctx, -0.9 * u, -0.42 * u, 1.8 * u, 1.3 * u, 0.12 * u);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'; // where the lid meets the body
-    ctx.lineWidth = 0.06 * u;
-    line(ctx, -0.9 * u, 0, 0.9 * u, 0);
-    ctx.fillStyle = oc.ink; // the coin slot
-    roundRect(ctx, -0.36 * u, -0.28 * u, 0.72 * u, 0.13 * u, 0.06 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.brass; // the coin
-    dot(ctx, 0, 0.44 * u, 0.27 * u);
-    ctx.fillStyle = SHADE;
-    dot(ctx, 0, 0.44 * u, 0.12 * u);
-  },
-
-  // Scenery Flat: a section of painted brick wall in a thin wooden frame.
-  flat(ctx, u, oc) {
-    ctx.fillStyle = oc.wood;
-    roundRect(ctx, -u, -u, 2 * u, 2 * u, 0.08 * u);
-    ctx.fill();
-    const e = 0.86 * u; // half the width of the brick area
-    const rowH = e / 2; // four rows of bricks
-    ctx.fillStyle = oc.brick;
-    ctx.fillRect(-e, -e, 2 * e, 2 * e);
-    ctx.strokeStyle = oc.mortar;
-    ctx.lineWidth = 0.07 * u;
-    for (let i = 1; i < 4; i++) line(ctx, -e, -e + i * rowH, e, -e + i * rowH);
-    for (let i = 0; i < 4; i++) {
-      const xs = i % 2 === 0 ? [-e / 3, e / 3] : [-2 * e / 3, 0, 2 * e / 3];
-      for (const x of xs) line(ctx, x, -e + i * rowH, x, -e + (i + 1) * rowH);
-    }
-  },
-
-  // Strongbox: a dark safe with a door, a brass dial and a handle.
-  strongbox(ctx, u, oc) {
-    ctx.fillStyle = oc.safe;
-    roundRect(ctx, -0.95 * u, -0.95 * u, 1.9 * u, 1.9 * u, 0.16 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.safeDoor;
-    roundRect(ctx, -0.72 * u, -0.72 * u, 1.44 * u, 1.44 * u, 0.1 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.brass;
-    dot(ctx, -0.12 * u, 0, 0.36 * u);
-    ctx.strokeStyle = oc.safe; // the marks around the dial
-    ctx.lineWidth = 0.06 * u;
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      line(ctx, -0.12 * u + Math.cos(a) * 0.2 * u, Math.sin(a) * 0.2 * u,
-        -0.12 * u + Math.cos(a) * 0.32 * u, Math.sin(a) * 0.32 * u);
-    }
-    ctx.fillStyle = oc.safe;
-    dot(ctx, -0.12 * u, 0, 0.11 * u);
-    ctx.fillStyle = oc.tin; // the handle
-    roundRect(ctx, 0.4 * u, -0.3 * u, 0.15 * u, 0.6 * u, 0.07 * u);
-    ctx.fill();
-  },
-
-  // Costume Bag: a round teal drawstring bag with a flared top, a cord and a star.
-  costume(ctx, u, oc) {
-    ctx.fillStyle = oc.bag;
-    ctx.beginPath();
-    ctx.moveTo(-0.3 * u, -0.42 * u);
-    ctx.bezierCurveTo(-1.05 * u, 0, -0.95 * u, 0.95 * u, 0, 0.95 * u);
-    ctx.bezierCurveTo(0.95 * u, 0.95 * u, 1.05 * u, 0, 0.3 * u, -0.42 * u);
-    ctx.lineTo(0.55 * u, -0.95 * u);
-    ctx.lineTo(-0.55 * u, -0.95 * u);
+    ctx.moveTo(-0.32 * u, -0.46 * u);
+    ctx.bezierCurveTo(-1.16 * u, 0, -1.02 * u, 0.98 * u, 0, 0.98 * u);
+    ctx.bezierCurveTo(1.02 * u, 0.98 * u, 1.16 * u, 0, 0.32 * u, -0.46 * u);
+    ctx.lineTo(0.66 * u, -0.98 * u);
+    ctx.lineTo(0, -0.8 * u);
+    ctx.lineTo(-0.66 * u, -0.98 * u);
     ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = oc.cord;
-    ctx.lineWidth = 0.12 * u;
-    ctx.lineCap = 'round';
-    line(ctx, -0.34 * u, -0.44 * u, 0.34 * u, -0.44 * u);
-    line(ctx, 0.3 * u, -0.44 * u, 0.56 * u, -0.14 * u); // the loose end of the cord
-    ctx.fillStyle = oc.cord; // a five-point star on the front
+    ink(ctx, oc.bag, edge, lw);
+    ctx.fillStyle = oc.bagLight; // the lit side
     ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const rad = (i % 2 === 0 ? 0.32 : 0.14) * u;
-      const a = (i * Math.PI) / 5 - Math.PI / 2;
-      ctx.lineTo(Math.cos(a) * rad, 0.3 * u + Math.sin(a) * rad);
-    }
-    ctx.closePath();
+    ctx.ellipse(-0.5 * u, 0.2 * u, 0.16 * u, 0.36 * u, 0.3, 0, TAU);
     ctx.fill();
+    box(ctx, -0.46 * u, -0.6 * u, 0.92 * u, 0.24 * u, 0.1 * u, oc.gold, dark(oc.brass), lw * 0.7); // the cord
+    star5(ctx, 0.06 * u, 0.3 * u, 0.44 * u, oc.gold, dark(oc.brass), lw * 0.7);
+    if (taken >= 1) crack(ctx, [[-0.86, -0.02], [-0.5, 0.2], [-0.7, 0.46], [-0.36, 0.78]], u, u, u, oc.gold);
+    if (taken >= 2) crack(ctx, [[0.86, 0.0], [0.56, 0.28], [0.74, 0.5], [0.4, 0.8]], u, u, u, oc.gold);
   },
 
-  // Padlock: a brass lock with a steel hoop and a keyhole.
-  padlock(ctx, u, oc) {
-    ctx.strokeStyle = oc.shackle;
-    ctx.lineWidth = 0.22 * u;
-    ctx.beginPath();
-    ctx.moveTo(-0.42 * u, -0.05 * u);
-    ctx.lineTo(-0.42 * u, -0.42 * u);
-    ctx.arc(0, -0.42 * u, 0.42 * u, Math.PI, 0);
-    ctx.lineTo(0.42 * u, -0.05 * u);
-    ctx.stroke();
-    ctx.fillStyle = oc.brass;
-    roundRect(ctx, -0.72 * u, -0.15 * u, 1.44 * u, 1.1 * u, 0.16 * u);
-    ctx.fill();
-    ctx.fillStyle = oc.ink; // the keyhole
-    dot(ctx, 0, 0.28 * u, 0.15 * u);
-    ctx.fillRect(-0.06 * u, 0.3 * u, 0.12 * u, 0.36 * u);
+  // Padlock: a brass lock with a steel hoop and a dark keyhole. (When it
+  // holds something, drawBlock below draws that first, then chains, then
+  // this lock on top.) Power-ups only.
+  padlock(ctx, { u, oc, lw }) {
+    pipe(ctx, () => {
+      ctx.moveTo(-0.44 * u, -0.06 * u);
+      ctx.lineTo(-0.44 * u, -0.46 * u);
+      ctx.arc(0, -0.46 * u, 0.44 * u, Math.PI, 0);
+      ctx.lineTo(0.44 * u, -0.06 * u);
+    }, 0.2 * u, oc.chain, oc.chainDark, lw);
+    box(ctx, -0.82 * u, -0.16 * u, 1.64 * u, 1.14 * u, 0.22 * u, oc.brass, dark(oc.brass, 0.6), lw);
+    box(ctx, -0.6 * u, -0.02 * u, 0.8 * u, 0.13 * u, 0.06 * u, GLOW); // the highlight
+    ctx.fillStyle = oc.badge;                                         // the keyhole
+    dot(ctx, 0, 0.34 * u, 0.2 * u);
+    ctx.fillRect(-0.09 * u, 0.36 * u, 0.18 * u, 0.4 * u);
   },
 };
 
 // ---- Batch 2 obstacles (docs/OBSTACLES2.md). ----
-// Each drawing gets one "box" object:
-//   a, b   half the width and half the height of the area it covers
-//          (a one-cell obstacle has a = b; a big block covers w x h cells)
-//   u      the same unit the batch-1 drawings use (0.42 of one cell)
-//   oc     obstacleColors from config/theme.js
-//   cell   the board cell (for hp, colors, count, open, color)
-//   theme  the theme (for the piece colors and shapes)
-//   plain  true for the small target picture: draw it whole and new
-// Everything is drawn around (0, 0), the middle of the area.
+// Each drawing gets the same "o" object as the batch-1 drawings above. For a
+// big block, a and b are half the width and height of its whole w x h area.
 
 // How many cells wide and high each big block is when the cell does not say.
 const BIG_SIZE = {
   planter: [2, 2], dovecote: [2, 2], footlights: [2, 2],
   fireworks: [2, 1], truss: [3, 1], ticketbooth: [3, 1],
 };
-
-// Hits needed when new, for the kinds that show cracks and hit pips.
-const FULL_HP2 = { planter: 5, dovecote: 5, truss: 2, ticketbooth: 4 };
 
 // Mix two "#rrggbb" colors: t = 0 gives a, t = 1 gives b.
 function mixColor(a, b, t) {
@@ -681,28 +921,11 @@ function pieceColor(theme, c, oc) {
   return info ? info.color : (oc.paintNone || '#8c95a6');
 }
 
-// A small flower: a colored bloom with a yellow middle.
-function bloom(ctx, x, y, r, color, oc) {
-  ctx.fillStyle = color;
-  dot(ctx, x, y, r);
+// A flower: a colored bloom with a dark outline and a yellow middle.
+function bloom(ctx, x, y, r, color, oc, lw) {
+  disc(ctx, x, y, r, color, dark(color, 0.5), lw);
   ctx.fillStyle = oc.flowerMid;
-  dot(ctx, x, y, r * 0.4);
-}
-
-// A small progress ring: a white disc with three arc pieces around it,
-// `n` of them lit. Used by the Top Hat and the Popcorn Cart.
-function progressRing(ctx, x, y, r, n, oc) {
-  ctx.fillStyle = '#ffffff';
-  dot(ctx, x, y, r);
-  ctx.lineWidth = r * 0.42;
-  ctx.lineCap = 'butt';
-  for (let i = 0; i < 3; i++) {
-    const from = -Math.PI / 2 + (i * TAU) / 3 + 0.2;
-    ctx.strokeStyle = i < n ? oc.ringOn : oc.ringOff;
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.68, from, from + TAU / 3 - 0.4);
-    ctx.stroke();
-  }
+  dot(ctx, x, y, r * 0.42);
 }
 
 // A four-point sparkle.
@@ -734,397 +957,345 @@ function slotColors(cell, slots, plain) {
 }
 
 const BLOCKS2 = {
-  // Planter (2x2): a wooden box with green foliage and flowers growing out.
-  planter(ctx, { a, b, oc }) {
-    const leaves = [[-0.58, -0.3, 0.4], [0, -0.48, 0.46], [0.58, -0.3, 0.4], [-0.28, -0.08, 0.4], [0.3, -0.08, 0.4]];
-    leaves.forEach(([x, y, r], i) => {
-      ctx.fillStyle = i % 2 === 0 ? oc.leaf : oc.leafDark;
-      dot(ctx, x * a, y * b, r * a);
-    });
-    const flowers = [[-0.62, -0.45], [0, -0.66], [0.6, -0.42], [-0.24, -0.2], [0.3, -0.24]];
-    flowers.forEach(([x, y], i) => {
-      bloom(ctx, x * a, y * b, 0.13 * a, [oc.flowerA, oc.flowerB, oc.flowerC][i % 3], oc);
-    });
-    ctx.fillStyle = oc.wood;
-    roundRect(ctx, -0.92 * a, 0.08 * b, 1.84 * a, 0.86 * b, 0.08 * a);
-    ctx.fill();
-    ctx.strokeStyle = oc.woodDark;
-    ctx.lineWidth = 0.07 * a;
-    ctx.stroke();
-    ctx.lineWidth = 0.04 * a;
-    for (const x of [-0.46, 0, 0.46]) line(ctx, x * a, 0.12 * b, x * a, 0.9 * b);
-    ctx.fillStyle = oc.woodDark; // the thick rim along the top of the box
-    roundRect(ctx, -a, 0.02 * b, 2 * a, 0.18 * b, 0.05 * a);
-    ctx.fill();
+  // Planter (2x2): a terracotta pot with a round green bush growing out.
+  // 5 matches: it carries one big flower for every hit still needed, so a
+  // flower is picked with each hit.
+  planter(ctx, { a, b, oc, lw, hp }) {
+    lump(ctx, [[-0.5, -0.3, 0.46], [0.5, -0.3, 0.46], [0, -0.48, 0.5], [0, 0, 0.5]],
+      a, b, oc.leaf, dark(oc.leafDark, 0.45), lw);
+    const spots = [[0, -0.62], [-0.58, -0.4], [0.58, -0.4], [-0.26, -0.1], [0.3, -0.12]];
+    for (let i = 0; i < Math.min(hp, spots.length); i++) {
+      bloom(ctx, spots[i][0] * a, spots[i][1] * b, 0.2 * a, i % 2 === 0 ? oc.flowerA : oc.flowerB, oc, lw * 0.8);
+    }
+    const edge = dark(oc.pot, 0.6);
+    poly(ctx, [[-0.86, 0.2], [0.86, 0.2], [0.68, 0.97], [-0.68, 0.97]], a, b, oc.pot, edge, lw);
+    box(ctx, -0.97 * a, 0.06 * b, 1.94 * a, 0.3 * b, 0.08 * a, oc.potRim, edge, lw); // the rim
   },
 
-  // Dovecote (2x2): a small white birdhouse, red roof, round door, a perch.
-  dovecote(ctx, { a, b, oc }) {
-    ctx.fillStyle = oc.cote;
-    roundRect(ctx, -0.68 * a, -0.3 * b, 1.36 * a, 1.2 * b, 0.08 * a);
-    ctx.fill();
-    ctx.strokeStyle = oc.coteEdge;
-    ctx.lineWidth = 0.05 * a;
-    ctx.stroke();
-    ctx.fillStyle = oc.roof;
-    ctx.beginPath();
-    ctx.moveTo(-0.98 * a, -0.22 * b);
-    ctx.lineTo(0, -0.98 * b);
-    ctx.lineTo(0.98 * a, -0.22 * b);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = oc.ink; // the round door
-    dot(ctx, 0, 0.18 * b, 0.26 * a);
-    ctx.strokeStyle = oc.woodDark; // the perch under the door
-    ctx.lineWidth = 0.08 * a;
-    ctx.lineCap = 'round';
-    line(ctx, -0.3 * a, 0.56 * b, 0.3 * a, 0.56 * b);
+  // Dovecote (2x2): a white birdhouse with a red roof, a round dark door and
+  // a perch. 5 matches: every hit adds one big crack.
+  dovecote(ctx, { a, b, u, oc, lw, taken }) {
+    const edge = dark(oc.coteEdge, 0.5);
+    box(ctx, -0.72 * a, -0.24 * b, 1.44 * a, 1.2 * b, 0.08 * a, oc.cote, edge, lw);
+    poly(ctx, [[-1.0, -0.14], [0, -0.98], [1.0, -0.14]], a, b, oc.roof, dark(oc.roof, 0.6), lw);
+    box(ctx, -0.42 * a, 0.68 * b, 0.84 * a, 0.14 * b, 0.05 * b, oc.woodDark, dark(oc.woodDark, 0.5), lw * 0.7); // the perch
+    disc(ctx, 0, 0.2 * b, 0.27 * a, oc.safeInside);                       // the round door
+    const cracks = [
+      [[-0.68, -0.1], [-0.46, 0.16], [-0.6, 0.4], [-0.42, 0.66]],
+      [[0.68, 0.0], [0.48, 0.3], [0.62, 0.56], [0.44, 0.88]],
+      [[-0.3, -0.7], [-0.44, -0.5], [-0.26, -0.38], [-0.4, -0.18]],
+      [[0.36, -0.66], [0.24, -0.48], [0.42, -0.36], [0.3, -0.18]],
+    ];
+    for (let i = 0; i < Math.min(taken, cracks.length); i++) crack(ctx, cracks[i], a, b, u);
   },
 
-  // Lighting Truss (w x 1): two silver rails with zigzag bracing between
-  // them, a dark plate at each end and two small lamps hanging below.
-  truss(ctx, { a, b, oc }) {
-    const top = -0.78 * b;
-    const bottom = 0.02 * b;
-    ctx.strokeStyle = oc.steelDark;
-    ctx.lineWidth = 0.09 * b;
-    ctx.lineJoin = 'round';
+  // Lighting Truss (w x 1): a long steel girder (two pale rails with a fat
+  // zigzag between them) with two stage lamps hanging under it. Power-ups
+  // only, 2 hits: the first hit breaks one lamp and cracks the girder.
+  truss(ctx, { a, b, u, oc, lw, taken }) {
+    const edge = dark(oc.steelDark, 0.65);
+    for (const side of [-1, 1]) { // the lamps (drawn first: they hang behind the girder)
+      const x = side * 0.5 * a;
+      const lit = !(taken > 0 && side > 0); // the right-hand lamp goes dark after a hit
+      poly(ctx, [[-0.34, 0.1], [0.34, 0.1], [0.6, 0.74], [-0.6, 0.74]].map(([px, py]) => [x / b + px, py]),
+        b, b, oc.hat, edge, lw);
+      box(ctx, x - 0.62 * b, 0.6 * b, 1.24 * b, 0.38 * b, 0.12 * b, lit ? oc.lampLight : oc.safeDoor, edge, lw);
+    }
+    box(ctx, -a, -0.96 * b, 2 * a, 1.2 * b, 0.16 * b, oc.steelDark, edge, lw);
+    ctx.save(); // the zigzag and the rails, kept inside the girder
+    ctx.clip();
     const n = Math.max(2, Math.round((2 * a) / (0.8 * b))); // number of zigzag legs
+    ctx.strokeStyle = oc.steel;
+    ctx.lineWidth = 0.2 * b;
     ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      ctx.lineTo(-0.94 * a + (1.88 * a * i) / n, i % 2 === 0 ? bottom : top);
-    }
+    for (let i = 0; i <= n; i++) ctx.lineTo(-a + (2 * a * i) / n, (i % 2 === 0 ? 0.06 : -0.78) * b);
     ctx.stroke();
-    ctx.fillStyle = oc.steel; // the two rails
-    roundRect(ctx, -a, top - 0.1 * b, 2 * a, 0.2 * b, 0.08 * b);
-    ctx.fill();
-    roundRect(ctx, -a, bottom - 0.1 * b, 2 * a, 0.2 * b, 0.08 * b);
-    ctx.fill();
-    ctx.fillStyle = oc.steelDark; // the end plates
-    ctx.fillRect(-a, top - 0.1 * b, 0.14 * b, bottom - top + 0.2 * b);
-    ctx.fillRect(a - 0.14 * b, top - 0.1 * b, 0.14 * b, bottom - top + 0.2 * b);
-    for (const side of [-1, 1]) { // the lamps
-      const x = side * 0.55 * a;
-      ctx.fillStyle = oc.ink;
-      ctx.beginPath();
-      ctx.moveTo(x - 0.2 * b, 0.12 * b);
-      ctx.lineTo(x + 0.2 * b, 0.12 * b);
-      ctx.lineTo(x + 0.36 * b, 0.62 * b);
-      ctx.lineTo(x - 0.36 * b, 0.62 * b);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = oc.lampLight;
-      roundRect(ctx, x - 0.36 * b, 0.58 * b, 0.72 * b, 0.2 * b, 0.08 * b);
-      ctx.fill();
-    }
+    ctx.fillStyle = oc.steel;
+    ctx.fillRect(-a, -0.96 * b, 2 * a, 0.32 * b);
+    ctx.fillRect(-a, -0.06 * b, 2 * a, 0.3 * b);
+    ctx.fillStyle = '#ffffff'; // the highlight along the top rail
+    ctx.fillRect(-a, -0.86 * b, 2 * a, 0.1 * b);
+    ctx.restore();
+    box(ctx, -a, -0.96 * b, 2 * a, 1.2 * b, 0.16 * b, null, edge, lw);
+    if (taken > 0) crack(ctx, [[0.1, -0.92], [-0.1, -0.56], [0.12, -0.3], [-0.06, 0.2]].map(([px, py]) => [px * b, py * b]), 1, 1, u);
   },
 
-  // Ticket Booth (3x1): a striped booth with a sign panel on top and a
-  // window. The window has a closed shutter until the first power hit.
-  ticketbooth(ctx, { a, b, oc, cell, plain }) {
-    const shut = !plain && !(typeof cell.hp === 'number' && cell.hp < FULL_HP2.ticketbooth);
-    ctx.fillStyle = oc.booth;
-    roundRect(ctx, -a, -0.6 * b, 2 * a, 1.55 * b, 0.14 * b);
-    ctx.fill();
+  // Ticket Booth (3x1): a cream booth with fat red stripes, a gold sign
+  // with lights along the top, and a window in the middle. First the window
+  // is shuttered in grey steel (a power-up must open it); then it shows a
+  // gold star (the power-ups inside) and takes 3 matches.
+  ticketbooth(ctx, { a, b, oc, lw, taken, plain }) {
+    const shut = !plain && taken === 0;
+    const edge = dark(oc.boothStripe, 0.6);
+    box(ctx, -a, -0.6 * b, 2 * a, 1.57 * b, 0.18 * b, oc.booth, edge, lw);
     ctx.save(); // keep the stripes inside the body
     ctx.clip();
     ctx.fillStyle = oc.boothStripe;
-    const stripe = (2 * a) / 13;
-    for (let i = 0; i < 13; i += 2) ctx.fillRect(-a + i * stripe, -0.6 * b, stripe, 1.55 * b);
+    const stripe = (2 * a) / 9;
+    for (let i = 0; i < 9; i += 2) ctx.fillRect(-a + i * stripe, -0.6 * b, stripe, 1.6 * b);
     ctx.restore();
-    // The window: dark glass with a counter, or a grey slatted shutter.
-    ctx.fillStyle = shut ? oc.tin : oc.boothGlass;
-    roundRect(ctx, -0.36 * a, -0.34 * b, 0.72 * a, 0.92 * b, 0.1 * b);
-    ctx.fill();
-    ctx.strokeStyle = oc.ink;
-    ctx.lineWidth = 0.07 * b;
-    ctx.stroke();
+    box(ctx, -a, -0.6 * b, 2 * a, 1.57 * b, 0.18 * b, null, edge, lw);
+    // The sign across the top, with five light bulbs.
+    box(ctx, -0.6 * a, -0.98 * b, 1.2 * a, 0.5 * b, 0.16 * b, oc.gold, dark(oc.brass, 0.6), lw);
+    for (let i = 0; i < 5; i++) disc(ctx, (i - 2) * 0.24 * a, -0.73 * b, 0.11 * b, '#ffffff');
+    // The window.
+    const wx = -0.36 * a;
+    const ww = 0.72 * a;
     if (shut) {
-      ctx.strokeStyle = oc.shackle;
-      ctx.lineWidth = 0.05 * b;
-      for (const y of [-0.14, 0.06, 0.26, 0.44]) line(ctx, -0.33 * a, y * b, 0.33 * a, y * b);
+      box(ctx, wx, -0.36 * b, ww, 1.14 * b, 0.1 * b, oc.tin, oc.chainDark, lw);
+      ctx.fillStyle = oc.shackle; // two fat slats
+      ctx.fillRect(wx + lw, -0.06 * b, ww - lw * 2, 0.18 * b);
+      ctx.fillRect(wx + lw, 0.34 * b, ww - lw * 2, 0.18 * b);
     } else {
-      ctx.fillStyle = GLOW; // a shine on the glass
-      ctx.fillRect(-0.3 * a, -0.26 * b, 0.1 * a, 0.5 * b);
-      ctx.fillStyle = oc.brass; // the counter
-      ctx.fillRect(-0.4 * a, 0.42 * b, 0.8 * a, 0.16 * b);
-    }
-    // The sign: a gold panel with a row of small marks standing for letters.
-    ctx.fillStyle = oc.brass;
-    roundRect(ctx, -0.5 * a, -b, a, 0.52 * b, 0.1 * b);
-    ctx.fill();
-    ctx.strokeStyle = oc.ink;
-    ctx.lineWidth = 0.06 * b;
-    ctx.stroke();
-    ctx.fillStyle = oc.ink;
-    for (let i = 0; i < 7; i++) {
-      ctx.fillRect(-0.4 * a + i * (0.8 * a / 7) + 0.02 * a, -0.86 * b, 0.07 * a, 0.24 * b);
+      box(ctx, wx, -0.36 * b, ww, 1.14 * b, 0.1 * b, oc.boothGlass, oc.chainDark, lw);
+      star5(ctx, 0, 0.22 * b, 0.46 * b, oc.gold, dark(oc.brass, 0.6), lw * 0.6);
     }
   },
 
   // Footlights (2x2): a dark panel with four sockets. A socket holds a round
   // bulb in a piece color while that color is still to go; a spent one is dark.
-  footlights(ctx, { a, b, oc, cell, theme, plain }) {
-    ctx.fillStyle = oc.safe;
-    roundRect(ctx, -0.96 * a, -0.96 * b, 1.92 * a, 1.92 * b, 0.12 * a);
-    ctx.fill();
-    ctx.strokeStyle = oc.safeDoor;
-    ctx.lineWidth = 0.08 * a;
-    ctx.stroke();
+  // The gem in each lamp is the color to match next to it.
+  footlights(ctx, { a, b, oc, lw, cell, theme, plain }) {
+    box(ctx, -0.97 * a, -0.97 * b, 1.94 * a, 1.94 * b, 0.14 * a, oc.safe, dark(oc.safe, 0.7), lw);
     const colors = slotColors(cell, 4, plain);
-    const r = 0.3 * Math.min(a, b);
+    const r = 0.37 * Math.min(a, b);
     colors.forEach((c, i) => {
-      const x = (i % 2 === 0 ? -0.45 : 0.45) * a;
-      const y = (i < 2 ? -0.45 : 0.45) * b;
-      ctx.fillStyle = oc.ink; // the socket
-      dot(ctx, x, y, r * 1.18);
-      if (c === null) return;
-      ctx.fillStyle = pieceColor(theme, c, oc);
-      dot(ctx, x, y, r);
-      ctx.fillStyle = GLOW;
-      dot(ctx, x - r * 0.3, y - r * 0.3, r * 0.3);
+      const x = (i % 2 === 0 ? -0.46 : 0.46) * a;
+      const y = (i < 2 ? -0.46 : 0.46) * b;
+      if (c === null) { // a lamp that is done: a dark empty socket
+        disc(ctx, x, y, r, oc.safeInside, oc.safeDoor, lw);
+        return;
+      }
+      disc(ctx, x, y, r + lw, oc.lampLight); // the glow round a lit lamp
+      gemMark(ctx, x, y, r, c, theme, null);
     });
   },
 
-  // Fireworks (2x1): a wooden crate with up to three rockets standing in it,
-  // one per color still to go.
-  fireworks(ctx, { a, b, oc, cell, theme, plain }) {
+  // Fireworks (2x1): a red crate with gold bursts on its front and up to
+  // three rockets standing in it. The head of each rocket IS a gem: match
+  // that color next to the crate to fire it.
+  fireworks(ctx, { a, b, oc, lw, cell, theme, plain }) {
     const colors = slotColors(cell, 3, plain);
     colors.forEach((c, i) => {
       if (c === null) return;
-      const x = (i - 1) * 0.56 * a;
-      const w = 0.13 * a;
-      ctx.fillStyle = pieceColor(theme, c, oc);
-      ctx.fillRect(x - w, -0.56 * b, 2 * w, 0.8 * b);
-      ctx.beginPath(); // the pointed nose
-      ctx.moveTo(x - w * 1.25, -0.56 * b);
-      ctx.lineTo(x, -b);
-      ctx.lineTo(x + w * 1.25, -0.56 * b);
+      const x = (i - 1) * 0.62 * a;
+      const color = pieceColor(theme, c, oc);
+      box(ctx, x - 0.13 * a, -0.3 * b, 0.26 * a, 0.9 * b, 0.04 * a, color, dark(color, 0.6), lw * 0.8); // the stick
+      const info = theme.pieces[c];
+      if (!info) return;
+      ctx.save();
+      ctx.translate(x, -0.36 * b);
+      (SHAPES[info.shape] || SHAPES.rose)(ctx, 0.58 * b, info.color, true);
+      ctx.restore();
+    });
+    // The front of the crate hides the rockets' feet. It is red, with a
+    // gold explosion mark: when the last rocket goes, it blasts.
+    box(ctx, -0.98 * a, 0.2 * b, 1.96 * a, 0.77 * b, 0.14 * b, oc.fireworkBox, dark(oc.fireworkBox, 0.6), lw);
+    for (const x of [-0.62, 0, 0.62]) {
+      ctx.beginPath(); // a spiky burst
+      for (let i = 0; i < 16; i++) {
+        const rad = (i % 2 === 0 ? 0.32 : 0.15) * b;
+        const ang = (i * Math.PI) / 8;
+        ctx.lineTo(x * a + Math.cos(ang) * rad, 0.58 * b + Math.sin(ang) * rad);
+      }
       ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#ffffff'; // a white band
-      ctx.fillRect(x - w, -0.36 * b, 2 * w, 0.12 * b);
-    });
-    ctx.fillStyle = oc.wood; // the front of the crate hides the rockets' feet
-    roundRect(ctx, -0.96 * a, -0.05 * b, 1.92 * a, 0.98 * b, 0.1 * b);
-    ctx.fill();
-    ctx.strokeStyle = oc.woodDark;
-    ctx.lineWidth = 0.1 * b;
-    ctx.stroke();
-    ctx.lineWidth = 0.06 * b;
-    line(ctx, -0.9 * a, 0.44 * b, 0.9 * a, 0.44 * b);
-    sparkle(ctx, 0, 0.44 * b, 0.3 * b, oc.roof); // a red burst mark on the front
-  },
-
-  // Bouquet: flowers in a cream paper wrap tied with a ribbon. With one hit
-  // left it looks picked over: two flowers and bare stems.
-  bouquet(ctx, { u, oc, cell, plain }) {
-    const picked = !plain && cell.hp === 1;
-    ctx.strokeStyle = oc.leafDark; // the stems
-    ctx.lineWidth = 0.07 * u;
-    ctx.lineCap = 'round';
-    for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) line(ctx, 0, 0.3 * u, x * u, -0.5 * u);
-    if (!picked) {
-      ctx.fillStyle = oc.leaf;
-      dot(ctx, -0.34 * u, -0.3 * u, 0.34 * u);
-      dot(ctx, 0.34 * u, -0.3 * u, 0.34 * u);
+      ink(ctx, oc.gold);
     }
-    const spots = picked
-      ? [[-0.28, -0.52], [0.4, -0.4]]
-      : [[-0.52, -0.42], [0, -0.66], [0.52, -0.42], [-0.24, -0.24], [0.26, -0.24]];
-    spots.forEach(([x, y], i) => {
-      bloom(ctx, x * u, y * u, 0.25 * u, [oc.flowerA, oc.flowerB, oc.flowerC][i % 3], oc);
-    });
-    ctx.fillStyle = oc.wrap; // the paper wrap
-    ctx.beginPath();
-    ctx.moveTo(-0.66 * u, -0.14 * u);
-    ctx.lineTo(0.66 * u, -0.14 * u);
-    ctx.lineTo(0.12 * u, 0.95 * u);
-    ctx.lineTo(-0.12 * u, 0.95 * u);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = oc.wrapEdge;
-    ctx.lineWidth = 0.06 * u;
-    ctx.stroke();
-    ctx.strokeStyle = oc.roof; // the ribbon
-    ctx.lineWidth = 0.13 * u;
-    line(ctx, -0.3 * u, 0.46 * u, 0.3 * u, 0.46 * u);
   },
 
-  // Top Hat: a black hat with a red band. The ring shows how many of the
-  // three match hits toward the next dove have landed.
-  tophat(ctx, { u, oc, cell, plain }) {
-    ctx.fillStyle = oc.ink;
-    ctx.beginPath();
-    ctx.ellipse(0, 0.62 * u, 0.95 * u, 0.2 * u, 0, 0, TAU); // the brim
-    ctx.fill();
-    roundRect(ctx, -0.56 * u, -0.8 * u, 1.12 * u, 1.42 * u, 0.1 * u); // the crown
-    ctx.fill();
-    ctx.fillStyle = oc.roof;
-    ctx.fillRect(-0.56 * u, 0.2 * u, 1.12 * u, 0.26 * u);
-    ctx.fillStyle = GLOW;
-    ctx.fillRect(-0.4 * u, -0.66 * u, 0.12 * u, 0.7 * u);
-    if (!plain) progressRing(ctx, 0.64 * u, -0.64 * u, 0.34 * u, (cell.count | 0) % 3, oc);
-  },
-
-  // Popcorn Cart: a red-and-white striped cart on two wheels with a glass
-  // box of popcorn on top, and the same progress ring as the Top Hat.
-  popper(ctx, { u, oc, cell, plain }) {
-    ctx.fillStyle = oc.glass; // the glass box
-    roundRect(ctx, -0.62 * u, -0.78 * u, 1.24 * u, 0.8 * u, 0.08 * u);
-    ctx.fill();
-    ctx.strokeStyle = oc.iceEdge;
-    ctx.lineWidth = 0.05 * u;
-    ctx.stroke();
-    ctx.fillStyle = oc.popcorn;
-    for (const [x, y] of [[-0.36, -0.2], [-0.1, -0.26], [0.16, -0.2], [0.4, -0.24], [-0.22, -0.44], [0.08, -0.48], [0.3, -0.44]]) {
-      dot(ctx, x * u, y * u, 0.15 * u);
+  // Bouquet: three big pink flowers in a cream paper cone tied with a pink
+  // ribbon. 2 hits: after the first, one flower is left on bare green stems.
+  bouquet(ctx, { u, oc, lw, taken }) {
+    const green = dark(oc.leafDark, 0.45);
+    // Green leaves poking out at both sides, then the stems.
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(side * 0.72 * u, -0.1 * u, 0.36 * u, 0.2 * u, side * -0.7, 0, TAU);
+      ink(ctx, oc.leaf, green, lw * 0.8);
     }
-    ctx.fillStyle = oc.roof; // the canopy
-    roundRect(ctx, -0.76 * u, -0.96 * u, 1.52 * u, 0.24 * u, 0.08 * u);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff'; // the cart body
-    roundRect(ctx, -0.8 * u, -0.04 * u, 1.6 * u, 0.7 * u, 0.1 * u);
-    ctx.fill();
-    ctx.save();
-    ctx.clip();
-    ctx.fillStyle = oc.roof;
-    for (let i = 0; i < 7; i += 2) ctx.fillRect(-0.8 * u + i * (1.6 * u / 7), -0.04 * u, 1.6 * u / 7, 0.7 * u);
-    ctx.restore();
-    ctx.strokeStyle = oc.roof;
-    ctx.lineWidth = 0.05 * u;
-    roundRect(ctx, -0.8 * u, -0.04 * u, 1.6 * u, 0.7 * u, 0.1 * u);
-    ctx.stroke();
-    ctx.fillStyle = oc.ink; // the wheels
-    dot(ctx, -0.46 * u, 0.76 * u, 0.2 * u);
-    dot(ctx, 0.46 * u, 0.76 * u, 0.2 * u);
-    ctx.fillStyle = oc.tin;
-    dot(ctx, -0.46 * u, 0.76 * u, 0.08 * u);
-    dot(ctx, 0.46 * u, 0.76 * u, 0.08 * u);
-    if (!plain) progressRing(ctx, 0.64 * u, -0.64 * u, 0.34 * u, (cell.count | 0) % 3, oc);
+    pipe(ctx, () => {
+      for (const x of [-0.46, 0, 0.46]) { ctx.moveTo(0, 0.3 * u); ctx.lineTo(x * u, -0.5 * u); }
+    }, 0.1 * u, oc.leaf, green, lw * 0.6);
+    // The flowers: five round petals each, with a yellow middle.
+    const flower = (x, y, r, color) => {
+      const petals = [];
+      for (let i = 0; i < 5; i++) {
+        const ang = (i * TAU) / 5 - Math.PI / 2;
+        petals.push([x + Math.cos(ang) * r * 0.56, y + Math.sin(ang) * r * 0.56, r * 0.48]);
+      }
+      lump(ctx, petals, u, u, color, dark(color, 0.55), lw * 0.8);
+      disc(ctx, x * u, y * u, r * 0.34 * u, oc.flowerMid);
+    };
+    if (taken > 0) flower(0, -0.56, 0.42, oc.flowerA);
+    else {
+      flower(-0.5, -0.46, 0.42, oc.flowerA);
+      flower(0.5, -0.46, 0.42, oc.flowerC);
+      flower(0, -0.6, 0.42, oc.flowerB);
+    }
+    // The paper wrap, with a notch at the top, and a bow.
+    poly(ctx, [[-0.8, -0.16], [0, 0.1], [0.8, -0.16], [0.2, 0.98], [-0.2, 0.98]], u, u, oc.wrap, dark(oc.wrapEdge, 0.5), lw);
+    for (const side of [-1, 1]) {
+      poly(ctx, [[0, 0.56], [side * 0.5, 0.36], [side * 0.5, 0.78]], u, u, oc.petalEdge, dark(oc.petalEdge, 0.5), lw * 0.6);
+    }
   },
 
-  // Candy Jar: a glass jar with a red lid holding one candy per hit left.
-  candyjar(ctx, { u, oc, cell, theme, plain }) {
-    const n = plain || typeof cell.hp !== 'number' ? 3 : Math.max(0, Math.min(5, cell.hp));
-    ctx.fillStyle = oc.glass;
-    roundRect(ctx, -0.66 * u, -0.5 * u, 1.32 * u, 1.44 * u, 0.3 * u);
-    ctx.fill();
-    ctx.strokeStyle = oc.iceEdge;
-    ctx.lineWidth = 0.08 * u;
-    ctx.stroke();
-    const spots = [[-0.28, 0.58], [0.28, 0.58], [0, 0.16], [-0.3, -0.16], [0.3, -0.16]];
-    for (let i = 0; i < n; i++) {
-      ctx.fillStyle = pieceColor(theme, (i * 2 + 1) % Math.max(1, theme.pieces.length), oc);
-      dot(ctx, spots[i][0] * u, spots[i][1] * u, 0.24 * u);
+  // Top Hat: a black hat with a red band. It never breaks: every third
+  // match next to it lets a dove out. The pie badge shows how far along.
+  tophat(ctx, { u, oc, lw }) {
+    const edge = dark(oc.hat, 0.7);
+    box(ctx, -0.62 * u, -0.96 * u, 1.24 * u, 1.6 * u, 0.12 * u, oc.hat, edge, lw); // the crown
+    ctx.fillStyle = oc.roof;                                                        // the band
+    ctx.fillRect(-0.62 * u + lw / 2, 0.12 * u, 1.24 * u - lw, 0.32 * u);
+    box(ctx, -0.42 * u, -0.78 * u, 0.18 * u, 0.74 * u, 0.08 * u, GLOW);             // the highlight
+    box(ctx, -1.0 * u, 0.5 * u, 2.0 * u, 0.4 * u, 0.2 * u, oc.hat, edge, lw);       // the brim
+  },
+
+  // Popcorn Cart: a red roof, a glass box heaped with yellow popcorn, a red
+  // cart body with a white panel, two wheels. It never breaks: every third
+  // match next to it pops one popcorn. The pie badge shows how far along.
+  popper(ctx, { u, oc, lw }) {
+    const edge = dark(oc.roof, 0.62);
+    box(ctx, -0.74 * u, -0.72 * u, 1.48 * u, 0.86 * u, 0.06 * u, oc.glass, edge, lw); // the glass box
+    lump(ctx, [[-0.36, -0.12, 0.2], [0, -0.26, 0.24], [0.36, -0.12, 0.2], [0, -0.04, 0.2]],
+      u, u, oc.candyB, dark(oc.brass, 0.5), lw * 0.6);                                // the popcorn
+    box(ctx, -0.92 * u, -0.99 * u, 1.84 * u, 0.36 * u, 0.12 * u, oc.roof, edge, lw);  // the roof
+    disc(ctx, -0.5 * u, 0.76 * u, 0.24 * u, oc.hat);                                  // the wheels
+    disc(ctx, 0.5 * u, 0.76 * u, 0.24 * u, oc.hat);
+    box(ctx, -0.88 * u, 0.08 * u, 1.76 * u, 0.6 * u, 0.12 * u, oc.roof, edge, lw);    // the cart body
+    box(ctx, -0.5 * u, 0.24 * u, 1.0 * u, 0.26 * u, 0.08 * u, '#ffffff');             // its white panel
+  },
+
+  // Candy Jar: a clear glass jar with a red lid, holding one big candy for
+  // every hit still needed (3, then 2, then 1).
+  candyjar(ctx, { u, oc, lw, hp }) {
+    box(ctx, -0.78 * u, -0.56 * u, 1.56 * u, 1.53 * u, 0.36 * u, oc.glass, oc.iceLine, lw);
+    const spots = [[0, 0.56], [-0.34, 0.04], [0.34, 0.04]];
+    const colors = [oc.candyA, oc.candyB, oc.candyC];
+    for (let i = 0; i < Math.min(hp, 3); i++) {
+      disc(ctx, spots[i][0] * u, spots[i][1] * u, 0.3 * u, colors[i], dark(colors[i], 0.5), lw * 0.7);
       ctx.fillStyle = GLOW;
-      dot(ctx, (spots[i][0] - 0.08) * u, (spots[i][1] - 0.08) * u, 0.08 * u);
+      dot(ctx, (spots[i][0] - 0.1) * u, (spots[i][1] - 0.1) * u, 0.09 * u);
     }
-    ctx.fillStyle = oc.roof; // the lid
-    roundRect(ctx, -0.5 * u, -0.86 * u, u, 0.36 * u, 0.1 * u);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff'; // a shine on the glass
-    ctx.lineWidth = 0.1 * u;
-    ctx.lineCap = 'round';
-    line(ctx, -0.46 * u, -0.22 * u, -0.46 * u, 0.4 * u);
+    box(ctx, -0.64 * u, -0.98 * u, 1.28 * u, 0.48 * u, 0.12 * u, oc.roof, dark(oc.roof, 0.62), lw); // the lid
+    box(ctx, -0.48 * u, -0.9 * u, 0.6 * u, 0.11 * u, 0.05 * u, GLOW);
   },
 
   // Makeup Case: open = a pink case with its lid up, a mirror in the lid and
   // a sparkle; closed = the same case shut and grey (a hit does nothing then).
-  makeupcase(ctx, { u, oc, cell, plain }) {
+  // OPEN is the only time a match next to it counts: bright, tall, with its
+  // mirror showing. CLOSED it is dull, low and shut tight.
+  makeupcase(ctx, { u, oc, lw, cell, plain }) {
     const open = plain || cell.open === true;
     if (open) {
-      ctx.fillStyle = oc.caseLid; // the raised lid
-      roundRect(ctx, -0.8 * u, -0.95 * u, 1.6 * u, 0.82 * u, 0.12 * u);
-      ctx.fill();
-      ctx.fillStyle = oc.glass; // the mirror
-      roundRect(ctx, -0.62 * u, -0.8 * u, 1.24 * u, 0.54 * u, 0.08 * u);
-      ctx.fill();
-      ctx.fillStyle = oc.casePink; // the body
-      roundRect(ctx, -0.86 * u, -0.1 * u, 1.72 * u, 0.98 * u, 0.14 * u);
-      ctx.fill();
-      ctx.fillStyle = oc.caseLid; // the tray with three colors of makeup
-      roundRect(ctx, -0.7 * u, 0.04 * u, 1.4 * u, 0.4 * u, 0.08 * u);
-      ctx.fill();
-      [oc.roof, oc.flowerB, oc.flowerC].forEach((c, i) => {
+      const edge = oc.caseEdge;
+      box(ctx, -0.86 * u, -0.98 * u, 1.72 * u, 0.98 * u, 0.18 * u, oc.caseOpen, edge, lw);   // the raised lid
+      box(ctx, -0.6 * u, -0.78 * u, 1.2 * u, 0.56 * u, 0.1 * u, oc.glass);                   // the mirror
+      sparkle(ctx, 0.28 * u, -0.5 * u, 0.3 * u, '#ffffff');
+      box(ctx, -0.96 * u, -0.02 * u, 1.92 * u, 0.98 * u, 0.2 * u, oc.caseOpen, edge, lw);    // the body
+      box(ctx, -0.7 * u, 0.2 * u, 1.4 * u, 0.48 * u, 0.12 * u, oc.caseLid);                  // the tray
+      [oc.roof, oc.gold, oc.flowerC].forEach((c, i) => {                                    // three pots of makeup
         ctx.fillStyle = c;
-        dot(ctx, (i - 1) * 0.42 * u, 0.24 * u, 0.14 * u);
+        dot(ctx, (i - 1) * 0.42 * u, 0.44 * u, 0.16 * u);
       });
-      sparkle(ctx, 0.36 * u, -0.56 * u, 0.3 * u, oc.brass);
     } else {
-      ctx.fillStyle = oc.caseShut;
-      roundRect(ctx, -0.86 * u, -0.38 * u, 1.72 * u, 1.26 * u, 0.14 * u);
-      ctx.fill();
-      ctx.strokeStyle = oc.shackle; // where the lid meets the body
-      ctx.lineWidth = 0.07 * u;
-      line(ctx, -0.86 * u, 0, 0.86 * u, 0);
-      ctx.beginPath(); // the handle
-      ctx.arc(0, -0.38 * u, 0.28 * u, Math.PI, 0);
-      ctx.stroke();
-      ctx.fillStyle = oc.shackle; // the latch
-      roundRect(ctx, -0.14 * u, -0.12 * u, 0.28 * u, 0.3 * u, 0.05 * u);
-      ctx.fill();
+      const edge = dark(oc.caseClosed, 0.6);
+      pipe(ctx, () => ctx.arc(0, -0.36 * u, 0.34 * u, Math.PI, 0), 0.12 * u, oc.caseClosed, edge, lw * 0.7); // the handle
+      box(ctx, -0.96 * u, -0.36 * u, 1.92 * u, 1.32 * u, 0.2 * u, oc.caseClosed, edge, lw);
+      ctx.fillStyle = edge; // where the lid shuts on the body
+      ctx.fillRect(-0.9 * u, 0.06 * u, 1.8 * u, 0.12 * u);
+      box(ctx, -0.2 * u, -0.08 * u, 0.4 * u, 0.44 * u, 0.08 * u, oc.tin, edge, lw * 0.7);     // the clasp
     }
   },
 
-  // Curtain: a velvet drape filling the whole cell, red tinted toward the
-  // color of the piece that opens it, with that piece's shape on a white
-  // badge. Whatever is behind it stays hidden.
-  curtain(ctx, { a, u, oc, cell, theme }) {
+  // Curtain: a velvet drape filling the whole cell IN THE COLOR OF ONE GEM,
+  // hanging from a gold rail, with that gem on a white disc. Clearing
+  // enough gems of that color opens it. Whatever is behind stays hidden.
+  curtain(ctx, { a, u, oc, lw, cell, theme }) {
     const info = typeof cell.color === 'number' ? theme.pieces[cell.color] : null;
-    const e = a * 1.1; // nearly the full cell, so neighbouring curtains join up
-    ctx.fillStyle = info ? mixColor(oc.velvet, info.color, 0.5) : oc.velvet;
-    roundRect(ctx, -e, -e, 2 * e, 2 * e, 0.1 * u);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.16)'; // the folds
-    for (const x of [-0.75, -0.25, 0.25, 0.75]) ctx.fillRect(x * e - 0.09 * e, -e, 0.18 * e, 2 * e);
-    ctx.fillStyle = oc.brass; // the rail along the top
-    ctx.fillRect(-e, -e, 2 * e, 0.16 * e);
-    if (info) {
-      ctx.fillStyle = '#ffffff';
-      dot(ctx, 0, 0.08 * u, 0.56 * u);
-      ctx.save();
-      ctx.translate(0, 0.08 * u);
-      (SHAPES[info.shape] || SHAPES.rose)(ctx, 0.32 * u, info.color);
-      ctx.restore();
+    const color = info ? info.color : oc.velvet;
+    const e = a * 1.12; // nearly the full cell, so neighbouring curtains join up
+    const hem = 0.82 * e;
+    // The drape: straight at the top and sides, four hanging swags at the hem.
+    ctx.beginPath();
+    ctx.moveTo(-e, -e);
+    ctx.lineTo(e, -e);
+    ctx.lineTo(e, hem);
+    for (let i = 0; i < 4; i++) ctx.quadraticCurveTo(e - (i + 0.5) * e / 2, hem + 0.4 * e, e - (i + 1) * e / 2, hem);
+    ctx.closePath();
+    ink(ctx, color, dark(color, 0.62), lw);
+    ctx.save(); // the pleats: dark folds between the swags, a lit stripe on each
+    ctx.clip();
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(-e + i * e / 2 - 0.09 * e, -e, 0.18 * e, 2.4 * e);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.fillRect(-e + (i + 0.5) * e / 2 - 0.07 * e, -e, 0.14 * e, 2.4 * e);
     }
+    ctx.restore();
+    box(ctx, -e, -e, 2 * e, 0.34 * e, 0.1 * u, oc.gold, dark(oc.brass, 0.6), lw); // the rail
+    if (info) gemMark(ctx, 0, 0.2 * e, 0.56 * u, cell.color, theme, dark(color, 0.62));
   },
 };
 
 // ---- The floor layer: confetti or petals lying on a cell, under its content. ----
-// The cell gets a tint and an inset colored line, with the marks placed
-// around the edges and corners, so it still shows with a piece on top.
+// A floor must show even with a gem sitting on it, and a gem covers the
+// middle of its cell. So the WHOLE cell is filled with a strong color and
+// gets a patterned border right at its edge:
+//   Confetti  bright yellow, with a border of red, blue and green dashes
+//   Petals    strong pink, with a dark pink scalloped border
 // (x0, y0) is the cell's top-left corner; `seed` only varies the colors.
 function drawFloor(ctx, kind, x0, y0, cell, theme, seed) {
   const oc = theme.obstacleColors || {};
   const confetti = kind === 'confetti';
   if (!confetti && kind !== 'petals') return; // a floor kind not known here
-  const gap = Math.max(1, cell * 0.035);
-  ctx.fillStyle = confetti ? oc.confettiTint : oc.petalTint;
-  roundRect(ctx, x0 + gap, y0 + gap, cell - gap * 2, cell - gap * 2, cell * 0.16);
+  const gap = cellGap(cell);
+  const side = cell - gap * 2;
+  const band = Math.max(2.5, cell * 0.1); // how wide the border is
+  ctx.save();
+  roundRect(ctx, x0 + gap, y0 + gap, side, side, cell * 0.14);
+  ctx.fillStyle = confetti ? oc.confettiFill : oc.petalFill;
   ctx.fill();
-  ctx.strokeStyle = confetti ? oc.confettiEdge : oc.petal;
-  ctx.lineWidth = Math.max(1, cell * 0.04);
-  roundRect(ctx, x0 + gap * 2, y0 + gap * 2, cell - gap * 4, cell - gap * 4, cell * 0.14);
-  ctx.stroke();
+  ctx.clip(); // nothing below may spill out of the cell
   if (confetti) {
-    const colors = [oc.confettiA, oc.confettiB, oc.confettiC, oc.confettiD];
-    const spots = [[0.15, 0.15], [0.5, 0.11], [0.85, 0.16], [0.11, 0.5], [0.89, 0.52],
-      [0.16, 0.85], [0.5, 0.89], [0.85, 0.85], [0.3, 0.3], [0.71, 0.7]];
-    spots.forEach(([fx, fy], i) => {
-      ctx.fillStyle = colors[(i + seed) % colors.length];
-      dot(ctx, x0 + fx * cell, y0 + fy * cell, cell * (i % 2 === 0 ? 0.055 : 0.04));
+    // The border: one line round the cell, drawn three times as dashes in
+    // three colors, each shifted along so the colors follow one another.
+    const colors = [oc.confettiA, oc.confettiB, oc.confettiC];
+    const dash = (side - band) / 6; // six dashes fit along each side
+    ctx.lineWidth = band;
+    ctx.lineCap = 'butt';
+    ctx.setLineDash([dash, dash * 2]);
+    colors.forEach((color, i) => {
+      ctx.strokeStyle = color;
+      ctx.lineDashOffset = -i * dash;
+      ctx.strokeRect(x0 + gap + band / 2, y0 + gap + band / 2, side - band, side - band);
+    });
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    // A few big dots in the middle, for a cell with nothing standing on it.
+    [[0.32, 0.36], [0.66, 0.34], [0.5, 0.62], [0.3, 0.68], [0.7, 0.66]].forEach(([fx, fy], i) => {
+      ctx.fillStyle = [oc.confettiA, oc.confettiB, oc.confettiC, oc.confettiD][(i + seed) % 4];
+      dot(ctx, x0 + fx * cell, y0 + fy * cell, cell * 0.06);
     });
   } else {
-    const spots = [[0.17, 0.17, 0.6], [0.83, 0.18, -0.6], [0.5, 0.12, 0], [0.13, 0.55, 1.2],
-      [0.87, 0.55, -1.2], [0.2, 0.85, -0.7], [0.8, 0.85, 0.7], [0.5, 0.89, 0.2]];
-    spots.forEach(([fx, fy, turn], i) => {
-      ctx.fillStyle = (i + seed) % 3 === 0 ? oc.petalDark : oc.petal;
+    // The border: a row of dark pink half-circles along every side.
+    ctx.fillStyle = oc.petalEdge;
+    const n = 5;
+    const r = side / (n * 2);
+    for (let i = 0; i < n; i++) {
+      const along = gap + r + i * 2 * r;
+      dot(ctx, x0 + along, y0 + gap, r * 0.86);
+      dot(ctx, x0 + along, y0 + cell - gap, r * 0.86);
+      dot(ctx, x0 + gap, y0 + along, r * 0.86);
+      dot(ctx, x0 + cell - gap, y0 + along, r * 0.86);
+    }
+    // A few loose petals in the middle, for a cell with nothing standing on it.
+    [[0.36, 0.34, 1.0], [0.66, 0.5, -0.5], [0.4, 0.7, -0.1]].forEach(([fx, fy, turn]) => {
       ctx.beginPath();
-      ctx.ellipse(x0 + fx * cell, y0 + fy * cell, cell * 0.1, cell * 0.055, turn, 0, TAU);
+      ctx.ellipse(x0 + fx * cell, y0 + fy * cell, cell * 0.11, cell * 0.06, turn, 0, TAU);
       ctx.fill();
     });
   }
+  ctx.restore();
 }
 
 // ---- Small pictures for the targets that are not obstacles themselves. ----
@@ -1135,8 +1306,9 @@ const ICONS = {
     ctx.fillStyle = oc.ice;
     dot(ctx, 0, 0, 0.98 * u);
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = oc.coteEdge;
-    ctx.lineWidth = 0.06 * u;
+    ctx.strokeStyle = dark(oc.coteEdge, 0.5);
+    ctx.lineWidth = edgeW(u) * 0.7;
+    ctx.lineJoin = 'round';
     ctx.beginPath(); // the tail
     ctx.moveTo(-0.3 * u, 0.1 * u);
     ctx.lineTo(-0.82 * u, 0.02 * u);
@@ -1172,10 +1344,8 @@ const ICONS = {
 
   // Popcorn: a red-and-white striped tub heaped with popcorn.
   popcorn(ctx, u, oc) {
-    ctx.fillStyle = oc.popcorn;
-    for (const [x, y] of [[-0.4, -0.3], [0, -0.42], [0.4, -0.3], [-0.2, -0.6], [0.22, -0.6]]) {
-      dot(ctx, x * u, y * u, 0.26 * u);
-    }
+    lump(ctx, [[-0.4, -0.3, 0.28], [0, -0.42, 0.28], [0.4, -0.3, 0.28], [-0.2, -0.62, 0.26], [0.22, -0.62, 0.26]],
+      u, u, oc.candyB, dark(oc.brass, 0.5), edgeW(u) * 0.7);
     const tub = () => {
       ctx.beginPath();
       ctx.moveTo(-0.72 * u, -0.22 * u);
@@ -1192,25 +1362,22 @@ const ICONS = {
     ctx.fillStyle = oc.roof;
     for (const x of [-0.6, -0.12, 0.36]) ctx.fillRect(x * u, -0.22 * u, 0.24 * u, 1.16 * u);
     ctx.restore();
-    ctx.strokeStyle = oc.roof;
-    ctx.lineWidth = 0.06 * u;
+    ctx.strokeStyle = dark(oc.roof, 0.62);
+    ctx.lineWidth = edgeW(u);
+    ctx.lineJoin = 'round';
     tub();
     ctx.stroke();
   },
 
   // Candy: a round wrapped sweet with a twist of paper at each end.
   candy(ctx, u, oc) {
-    ctx.fillStyle = oc.flowerB;
+    const lw = edgeW(u);
+    ctx.lineJoin = 'round';
     for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(side * 0.4 * u, 0);
-      ctx.lineTo(side * 0.98 * u, -0.42 * u);
-      ctx.lineTo(side * 0.98 * u, 0.42 * u);
-      ctx.closePath();
-      ctx.fill();
+      poly(ctx, [[side * 0.4, 0], [side * 0.98, -0.46], [side * 0.98, 0.46]], u, u,
+        oc.candyB, dark(oc.brass, 0.5), lw * 0.8);
     }
-    ctx.fillStyle = oc.roof;
-    dot(ctx, 0, 0, 0.56 * u);
+    disc(ctx, 0, 0, 0.58 * u, oc.candyA, dark(oc.candyA, 0.55), lw);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 0.12 * u;
     ctx.lineCap = 'round';
@@ -1229,155 +1396,112 @@ function drawBlock2(ctx, cell, cx, cy, size, theme, plain) {
   const w = Number.isInteger(cell.w) && cell.w > 0 ? cell.w : std[0];
   const h = Number.isInteger(cell.h) && cell.h > 0 ? cell.h : std[1];
   const u = size * 0.42;
+  const lw = edgeW(u);
   const a = (w * size) / 2 - size * 0.08; // half the width of the drawing
   const b = (h * size) / 2 - size * 0.08; // half its height
+  // How many hits it needs when new, how many are left, how many have landed.
+  const def = OBSTACLES2[cell.kind];
+  const hits = def && Array.isArray(def.hits) ? def.hits : [];
+  const full = hits.length;
+  const hp = plain || typeof cell.hp !== 'number' ? full : Math.max(0, Math.min(full, cell.hp));
+  const taken = full - hp;
   ctx.save();
   ctx.translate(cx + ((w - 1) * size) / 2, cy + ((h - 1) * size) / 2); // middle of the area
-  BLOCKS2[cell.kind](ctx, { a, b, u, oc, cell, theme, plain });
+  ctx.lineJoin = 'round';
+  BLOCKS2[cell.kind](ctx, { a, b, u, lw, oc, cell, theme, plain, hp, taken });
 
-  const full = FULL_HP2[cell.kind];
-  if (!plain && full) {
-    const hp = typeof cell.hp === 'number' ? cell.hp : full;        // hits still needed
-    const taken = Math.max(0, Math.min(CRACKS.length, full - hp)); // hits already taken
-    // The same damage marks as batch 1, stretched over the whole area:
-    // a lighter tint and one more crack per hit taken.
-    if (taken > 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.12 * taken) + ')';
-      ctx.fillRect(-a, -b, 2 * a, 2 * b);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (let i = 0; i < taken; i++) {
-        for (const [color, width] of [['#ffffff', 0.15], [oc.ink || '#1b2030', 0.07]]) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = width * u;
-          ctx.beginPath();
-          for (const [px, py] of CRACKS[i]) ctx.lineTo(px * a, py * b);
-          ctx.stroke();
-        }
-      }
-    }
-    // One small dot per hit still needed, along the bottom edge.
-    if (hp > 1) {
-      const step = 0.36 * u;
-      for (let i = 0; i < hp; i++) {
-        const px = (i - (hp - 1) / 2) * step;
-        ctx.fillStyle = '#ffffff';
-        dot(ctx, px, b - 0.2 * u, 0.16 * u);
-        ctx.fillStyle = oc.ink || '#1b2030';
-        dot(ctx, px, b - 0.2 * u, 0.105 * u);
-      }
-    }
+  if (!plain) {
+    // Top left: the lightning badge while the next hit must be a power-up.
+    if (hits[taken] === 'power') powerMark(ctx, -a + 0.3 * u, -b + 0.3 * u, 0.38 * u, oc);
+    // Bottom right: the number of hits left, or (for the two obstacles that
+    // never break) the pie that shows how far along the next gift is.
+    if (hp > 1) hitBadge(ctx, a - 0.3 * u, b - 0.3 * u, 0.42 * u, hp, oc);
+    else if (def && def.generator) pieBadge(ctx, a - 0.3 * u, b - 0.3 * u, 0.42 * u, (cell.count | 0) % 3, oc);
   }
   ctx.restore();
 }
 
-// Up to three crack lines, as points in units of "u". One more crack is
-// drawn for every hit an obstacle has already taken.
-const CRACKS = [
-  [[-0.8, -0.62], [-0.38, -0.3], [-0.52, 0.02], [-0.12, 0.3]],
-  [[0.82, -0.5], [0.42, -0.22], [0.56, 0.14], [0.16, 0.42]],
-  [[-0.25, 0.9], [0.02, 0.52], [-0.1, 0.22], [0.2, -0.05]],
-];
-
 // Draw one obstacle centered at (cx, cy).
-// With plain = true it is drawn whole, with no cracks, hit pips or contents
-// (used for the small target pictures).
+// With plain = true it is drawn whole and new, with no badges and nothing
+// inside it (used for the small target pictures).
 function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
   // Batch-2 kinds (and big blocks) have their own drawing routine.
   if (Object.hasOwn(BLOCKS2, cell.kind)) { drawBlock2(ctx, cell, cx, cy, size, theme, plain); return; }
   const oc = theme.obstacleColors || {};
   const u = size * 0.42;
+  const lw = edgeW(u);
+  // How many hits it needs when new, how many are left, how many have landed.
+  const info = OBSTACLES[cell.kind];
+  const hits = info && Array.isArray(info.hits) ? info.hits : [];
+  const full = hits.length || 1;
+  const hp = plain || typeof cell.hp !== 'number' ? full : Math.max(0, Math.min(full, cell.hp));
+  const taken = full - hp;
+  const o = { a: u, b: u, u, lw, oc, cell, theme, plain, hp, taken };
   ctx.save();
   ctx.translate(cx, cy);
+  ctx.lineJoin = 'round';
 
   if (cell.kind === 'padlock') {
-    // The padlock holds something: draw that first, fade it, then the lock on top.
     const holds = !plain && cell.inside;
     if (holds) {
+      // The padlock holds something. Draw that thing first (so its color
+      // and shape still show), then two chains crossed over it, then a
+      // smaller lock in the middle.
       drawContent(ctx, cell.inside, 0, 0, size, theme);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      roundRect(ctx, -size * 0.46, -size * 0.46, size * 0.92, size * 0.92, size * 0.16);
-      ctx.fill();
-    }
-    BLOCKS.padlock(ctx, holds ? u * 0.74 : u, oc);
+      ctx.save();
+      roundRect(ctx, -size * 0.46, -size * 0.46, size * 0.92, size * 0.92, size * 0.14);
+      ctx.clip(); // the chains stop at the edge of the cell
+      for (const dir of [1, -1]) {
+        pipe(ctx, () => { ctx.moveTo(-size / 2, -dir * size / 2); ctx.lineTo(size / 2, dir * size / 2); },
+          0.15 * u, oc.chain, oc.chainDark, lw * 0.75);
+      }
+      ctx.restore();
+      const small = u * 0.5;
+      ctx.translate(0, 0.14 * u);
+      BLOCKS.padlock(ctx, { ...o, u: small, lw: edgeW(small) });
+      ctx.translate(0, -0.14 * u);
+    } else BLOCKS.padlock(ctx, o);
   } else if (BLOCKS[cell.kind]) {
-    BLOCKS[cell.kind](ctx, u, oc, cell, theme);
+    BLOCKS[cell.kind](ctx, o);
   } else {
     // An obstacle kind this file does not know yet: a plain grey box.
-    ctx.fillStyle = oc.paintNone || '#8c95a6';
-    roundRect(ctx, -0.9 * u, -0.9 * u, 1.8 * u, 1.8 * u, 0.16 * u);
-    ctx.fill();
+    box(ctx, -0.9 * u, -0.9 * u, 1.8 * u, 1.8 * u, 0.16 * u, oc.paintNone || '#8c95a6', oc.badge, lw);
   }
 
   if (!plain) {
-    const info = OBSTACLES[cell.kind];
-    const full = info && Array.isArray(info.hits) ? info.hits.length : 1; // hits when new
-    const hp = typeof cell.hp === 'number' ? cell.hp : full;               // hits still needed
-    const taken = Math.max(0, Math.min(CRACKS.length, full - hp));         // hits already taken
-
-    // The more hits it has taken, the more broken it looks: a lighter tint
-    // and one more crack per hit.
-    if (taken > 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.16 * taken) + ')';
-      ctx.fillRect(-u * 1.1, -u * 1.1, u * 2.2, u * 2.2);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (let i = 0; i < taken; i++) {
-        // Each crack is drawn twice: a wide white line under a thin dark
-        // one, so it shows on dark and light obstacles alike.
-        for (const [color, width] of [['#ffffff', 0.15], [oc.ink || '#1b2030', 0.07]]) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = width * u;
-          ctx.beginPath();
-          for (const [px, py] of CRACKS[i]) ctx.lineTo(px * u, py * u);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // One small dot per hit still needed, shown when more than one is left.
-    if (hp > 1) {
-      const step = 0.36 * u;
-      for (let i = 0; i < hp; i++) {
-        const px = (i - (hp - 1) / 2) * step;
-        ctx.fillStyle = '#ffffff';
-        dot(ctx, px, 0.8 * u, 0.16 * u);
-        ctx.fillStyle = oc.ink || '#1b2030';
-        dot(ctx, px, 0.8 * u, 0.105 * u);
-      }
-    }
+    // Top left: the lightning badge while the next hit must be a power-up.
+    if (hits[taken] === 'power') powerMark(ctx, -0.72 * u, -0.72 * u, 0.38 * u, oc);
+    // Bottom right: the number of hits left, when more than one.
+    if (hp > 1) hitBadge(ctx, 0.72 * u, 0.72 * u, 0.42 * u, hp, oc);
   }
   ctx.restore();
 }
 
-// Sandbag (the dropper): a tan sack tied at the top, with a small down
-// arrow to show it has to reach the bottom of its column.
+// Sandbag (the dropper): a heavy tan sack with a flat bottom, tied at the
+// neck, hanging from a rope ring, with a big white DOWN arrow: it has to be
+// brought down to the bottom of its column.
 function drawDrop(ctx, cx, cy, size, theme) {
   const oc = theme.obstacleColors || {};
   const u = size * 0.42;
+  const lw = edgeW(u);
+  const edge = oc.sackBand;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.fillStyle = oc.sack;
-  ctx.beginPath();
-  ctx.moveTo(-0.26 * u, -0.5 * u);
-  ctx.bezierCurveTo(-1.0 * u, -0.1 * u, -0.95 * u, 0.92 * u, 0, 0.92 * u);
-  ctx.bezierCurveTo(0.95 * u, 0.92 * u, 1.0 * u, -0.1 * u, 0.26 * u, -0.5 * u);
-  ctx.lineTo(0.4 * u, -0.95 * u);
-  ctx.lineTo(-0.4 * u, -0.95 * u);
+  ctx.lineJoin = 'round';
+  disc(ctx, 0, -0.8 * u, 0.15 * u, null, edge, 0.14 * u); // the rope ring
+  ctx.beginPath();                                        // the sack
+  ctx.moveTo(-0.3 * u, -0.6 * u);
+  ctx.bezierCurveTo(-0.5 * u, -0.3 * u, -1.04 * u, 0.2 * u, -0.9 * u, 0.74 * u);
+  ctx.quadraticCurveTo(-0.84 * u, 0.98 * u, -0.56 * u, 0.98 * u);
+  ctx.lineTo(0.56 * u, 0.98 * u);
+  ctx.quadraticCurveTo(0.84 * u, 0.98 * u, 0.9 * u, 0.74 * u);
+  ctx.bezierCurveTo(1.04 * u, 0.2 * u, 0.5 * u, -0.3 * u, 0.3 * u, -0.6 * u);
   ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = oc.sackDark; // the tie
-  ctx.lineWidth = 0.14 * u;
-  ctx.lineCap = 'round';
-  line(ctx, -0.3 * u, -0.52 * u, 0.3 * u, -0.52 * u);
-  ctx.fillStyle = oc.sackDark;   // the down arrow
-  ctx.fillRect(-0.09 * u, -0.14 * u, 0.18 * u, 0.42 * u);
-  ctx.beginPath();
-  ctx.moveTo(-0.3 * u, 0.26 * u);
-  ctx.lineTo(0.3 * u, 0.26 * u);
-  ctx.lineTo(0, 0.64 * u);
-  ctx.closePath();
-  ctx.fill();
+  ink(ctx, oc.sack, edge, lw);
+  box(ctx, -0.4 * u, -0.72 * u, 0.8 * u, 0.24 * u, 0.1 * u, oc.sackDark, edge, lw * 0.7); // the tie
+  // The down arrow.
+  poly(ctx, [[-0.16, -0.22], [0.16, -0.22], [0.16, 0.24], [0.46, 0.24], [0, 0.8], [-0.46, 0.24], [-0.16, 0.24]],
+    u, u, '#ffffff', edge, lw * 0.8);
   ctx.restore();
 }
 
@@ -1412,11 +1536,14 @@ export function drawTargetIcon(ctx, target, size, theme) {
     const oc = theme.obstacleColors || {};
     if (kind === DROPPER.id) drawDrop(ctx, mid, mid, size, theme);
     else if (kind === 'confetti' || kind === 'petals') {
-      // A floor target: a small white cell with that floor on it.
-      ctx.fillStyle = theme.ui.cell;
-      roundRect(ctx, size * 0.04, size * 0.04, size * 0.92, size * 0.92, size * 0.16);
-      ctx.fill();
+      // A floor target: one cell with that floor on it, and a dark line
+      // round it so the small picture has a clear edge.
       drawFloor(ctx, kind, 0, 0, size, theme, 0);
+      const g = cellGap(size);
+      ctx.strokeStyle = dark(kind === 'confetti' ? oc.confettiEdge : oc.petalEdge, 0.45);
+      ctx.lineWidth = Math.max(1, size * 0.05);
+      roundRect(ctx, g, g, size - g * 2, size - g * 2, size * 0.14);
+      ctx.stroke();
     } else if (Object.hasOwn(ICONS, kind)) {
       // Something a generator gives out: dove, popcorn or candy.
       ctx.save();
@@ -1425,7 +1552,9 @@ export function drawTargetIcon(ctx, target, size, theme) {
       ctx.restore();
     } else if (BIG_SIZE[kind]) {
       // A big block: shrink it so its whole w x h area fits in the square.
-      const [w, h] = BIG_SIZE[kind];
+      // (The long thin ones are drawn only 2 cells wide here; at their real
+      // 3-cell width they would come out too small to make out.)
+      const [w, h] = BIG_SIZE[kind][1] === 1 ? [2, 1] : BIG_SIZE[kind];
       const s = size / Math.max(w, h);
       drawBlock(ctx, { t: 'block', kind, w, h }, mid - ((w - 1) * s) / 2, mid - ((h - 1) * s) / 2, s, theme, true);
     } else drawBlock(ctx, { t: 'block', kind: target.block, color: target.color }, mid, mid, size, theme, true);
@@ -1467,27 +1596,42 @@ export function drawBoard(ctx, board, layout, theme, overlay) {
   ctx.fillRect(0, 0, layout.canvasW ?? ctx.canvas.width, layout.canvasH ?? ctx.canvas.height);
   if (!board) return;
 
-  // The light grey tray the whole board sits in.
-  const rim = Math.min(4, BOARD_PAD);
-  ctx.fillStyle = ui.tray || ui.panel;
-  roundRect(ctx, originX - rim, originY - rim,
-    cell * board.cols + rim * 2, cell * board.rows + rim * 2, cell * 0.2);
-  ctx.fill();
+  // THE TRAY: one solid tinted slab under the playable cells only, with a
+  // crisp dark line all the way round it, and round every hole inside it.
+  // A hole (a spot where gems never go) gets nothing at all: the plain page
+  // shows there, so it reads as a gap you can see through.
+  ctx.lineJoin = 'round';
+  // First the same shape in the dark edge color, a few pixels lower: it
+  // shows as a dark lip under the tray and along the top of every hole, so
+  // the tray looks like a raised slab with the holes cut right through it.
+  const lip = Math.min(4, cell * 0.11);
+  ctx.save();
+  ctx.translate(0, lip);
+  traceTray(ctx, board, layout);
+  ctx.fillStyle = ui.boardEdge || ui.text;
+  ctx.fill('evenodd');
+  ctx.restore();
+  traceTray(ctx, board, layout);
+  ctx.fillStyle = ui.board || ui.tray || ui.panel;
+  ctx.fill('evenodd');
+  ctx.strokeStyle = ui.boardEdge || ui.text;
+  ctx.lineWidth = Math.max(2, Math.min(3, cell * 0.065)); // 2 to 3 px
+  ctx.stroke();
 
-  // The white square behind every playable cell. Holes get nothing, so the
-  // tray shows through. An empty cell is just this square.
-  const gap = Math.max(1, cell * 0.035);
-  ctx.fillStyle = ui.cell;
+  // The lighter square inside every playable cell, so the grid reads.
+  // An empty cell is just this square.
+  const gap = cellGap(cell);
+  ctx.fillStyle = ui.boardCell || ui.cell;
   for (let y = 0; y < board.rows; y++) {
     for (let x = 0; x < board.cols; x++) {
       if (get(board, x, y) === null) continue;
       roundRect(ctx, originX + x * cell + gap, originY + y * cell + gap,
-        cell - gap * 2, cell - gap * 2, cell * 0.16);
+        cell - gap * 2, cell - gap * 2, cell * 0.14);
       ctx.fill();
     }
   }
 
-  // The floor layer (confetti, petals), on top of the white squares and
+  // The floor layer (confetti, petals), on top of the lighter squares and
   // under everything else. A board saved before floors existed has no
   // `floor` list: that means no floor anywhere.
   if (Array.isArray(board.floor)) {

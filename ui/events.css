@@ -2,15 +2,7 @@
    Everything here is made by ui/events.js. Colors come from the same
    variables as ui/style.css (set from config/theme.js). */
 
-/* Home now holds the badge grid, so its middle part scrolls up and down. */
-.home-mid {
-  justify-content: flex-start;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
-.home-mid > * { flex-shrink: 0; }
+/* (Home's three columns, and how they scroll, are laid out in ui/style.css.) */
 
 /* Results may grow too: keep it centered while it fits, scroll when it does not. */
 .results-mid { justify-content: flex-start; overflow-y: auto; overflow-x: hidden; }
@@ -47,21 +39,17 @@
 .ev-boost-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #level-boost { display: flex; flex-direction: column; gap: 4px; }
 
-/* ---- Home: the grid of round picture badges ----
-   Four across. Each badge is one button: the picture, a short name, then
-   the time left. The pictures themselves are drawn by ui/eventicons.js. */
-.ev-badges {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px 2px; /* between rows, between columns */
-  padding: 4px 6px 0; /* side room so the last column's bubble is never cut off */
-}
+/* ---- Home: the round picture badges down the two edges ----
+   Each badge is one button: the picture, then a small pill with the time
+   left. The pictures themselves are drawn by ui/eventicons.js. The columns
+   (.home-side) are in ui/style.css; the badge width --ev-size is worked out
+   by fitBadges() in ui/events.js so a column fits the screen. */
 .ev-b {
   appearance: none; -webkit-appearance: none;
-  background: none; border: 0; margin: 0; padding: 4px 0 2px;
+  background: none; border: 0; margin: 0; padding: 0;
   font: inherit; color: inherit; text-align: center;
   display: flex; flex-direction: column; align-items: center;
-  min-width: 0; min-height: 44px;
+  width: 100%; min-width: 44px; min-height: 44px;
   border-radius: 14px;
   cursor: pointer; touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -70,24 +58,27 @@
 /* The picture, with a soft shadow so it sits a little above the page. */
 .ev-b-pic {
   position: relative; display: block;
-  width: 68px; height: 68px; /* keep the same as BADGE_PX in ui/events.js */
+  width: var(--ev-size, 58px); height: var(--ev-size, 58px);
   filter: drop-shadow(0 2px 3px rgba(27, 32, 48, 0.2));
   transition: transform 0.08s ease-out;
 }
+/* The picture is drawn once at full size and shown at the badge's size. */
+.ev-b-pic .ev-b-canvas { width: 100% !important; height: 100% !important; }
 .ev-b:active .ev-b-pic { transform: scale(0.93); } /* a small squeeze when pressed */
-.ev-b-name {
-  max-width: calc(100% + 6px); margin: 5px -3px 0; /* may lean 3px into the gap each side */
-  font-size: 12px; letter-spacing: -0.01em; font-weight: 700; line-height: 1.2;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* The timer pill under the picture: "2d 3h", "26 min". Its height plus the
+   gap above it is PILL_PX in ui/events.js. */
 .ev-b-time {
-  min-height: 15px; /* keeps every badge the same height, with or without a clock */
-  font-size: 11px; line-height: 15px; color: var(--dim);
+  margin-top: 3px; height: 15px; padding: 0 5px;
+  max-width: calc(100% + 8px);
+  border-radius: 8px; background: var(--tray); color: var(--text);
+  font-size: 10px; font-weight: 700; line-height: 15px; letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-/* The bubble at the top right: rank, fraction or step. */
+.ev-b-time:empty { visibility: hidden; } /* no clock: keep the space, show no pill */
+/* The bubble at the top corner on the inner side (toward the middle of the
+   screen, so the screen edge never cuts it off): rank, fraction or step. */
 .ev-b-bubble, .ev-b-start {
-  position: absolute; top: -5px; right: -8px;
+  position: absolute; top: -6px; right: -9px; z-index: 1;
   min-width: 22px; height: 20px; padding: 0 6px;
   border-radius: 10px; border: 1.5px solid var(--line);
   background: var(--bg); color: var(--text);
@@ -106,12 +97,54 @@
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.14); }
 }
-@media (prefers-reduced-motion: reduce) { .ev-b-start { animation: none; } }
 /* The small red dot: the event has just finished (or has something to collect). */
 .ev-b-dot {
   position: absolute; top: 1px; left: 1px;
   width: 13px; height: 13px; border-radius: 50%;
   background: #e5383b; border: 2px solid var(--bg);
+}
+/* In the right-hand column everything is mirrored: bubble on the left, dot on the right. */
+.home-side.right .ev-b-bubble, .home-side.right .ev-b-start { right: auto; left: -9px; }
+.home-side.right .ev-b-dot { left: auto; right: 1px; }
+
+/* ---- Right after a level: what a badge gained ----
+   The "+3" pops in on the inner side of the badge, floats up and fades
+   (1.5 s: keep the same as GAIN_FLOAT_MS in ui/events.js). */
+.ev-b-plus {
+  position: absolute; top: 28%; left: calc(100% + 3px); z-index: 2;
+  font-size: 17px; font-weight: 800; line-height: 1; color: #0b8a48;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 1px 2px #fff;
+  white-space: nowrap; pointer-events: none;
+  animation: ev-plus 1.5s ease-out forwards;
+}
+.home-side.right .ev-b-plus { left: auto; right: calc(100% + 3px); }
+@keyframes ev-plus {
+  0% { opacity: 0; transform: translateY(8px) scale(0.5); }
+  14% { opacity: 1; transform: translateY(0) scale(1.25); }
+  26% { opacity: 1; transform: translateY(-2px) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-24px) scale(1); }
+}
+/* The bubble swells for a moment as its number changes. */
+.ev-b-bump { animation: ev-bump 0.35s ease-out; }
+@keyframes ev-bump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+/* The Rewards badge hops when new prizes have gone into the tray. */
+.ev-b-bounce { animation: ev-bounce 0.6s ease-out; }
+@keyframes ev-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-9px); }
+  55% { transform: translateY(0); }
+  75% { transform: translateY(-4px); }
+}
+/* Less motion asked for: nothing pulses, floats or hops (ui/events.js also
+   skips the "+3" altogether and just shows the new numbers). */
+@media (prefers-reduced-motion: reduce) {
+  .ev-b-start, .ev-b-bump, .ev-b-bounce { animation: none; }
+  .ev-b-plus { display: none; }
 }
 /* Finished events: the bubble says how it went; a lost or ended one fades. */
 .ev-b.won .ev-b-bubble { background: #dff3e7; color: #0b6b39; border-color: #0b8a48; }

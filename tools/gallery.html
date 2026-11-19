@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- ART GALLERY: every picture the board can show, on one page.
+     Open http://localhost:8140/tools/gallery.html while the dev server runs.
+     It is a tool for checking the artwork; the game itself never loads it.
+     Add ?only=obstacles (or gems, floors, icons, boards) to show one part. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Places, Please: art gallery</title>
+<style>
+  body { margin: 12px; font: 12px system-ui, sans-serif; color: #1b2030; background: #ffffff; }
+  h2 { margin: 18px 0 6px; font-size: 15px; border-bottom: 2px solid #d3dae5; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .card { border: 1px solid #d3dae5; border-radius: 6px; padding: 4px 6px; background: #ffffff; }
+  .card b { display: block; font-size: 11px; margin-bottom: 2px; }
+  .card .pics { display: flex; gap: 6px; align-items: flex-end; }
+  canvas { display: block; }
+  .note { color: #5c6478; margin: 2px 0 8px; }
+</style>
+</head>
+<body>
+<h1 style="font-size:17px;margin:0">Places, Please: art gallery</h1>
+<p class="note">Each card: phone size at 36 px cells, phone size at 47 px cells, then the 36 px picture enlarged 3 times.</p>
+<div id="gallery"></div>
+<script type="module" src="./gallery.js"></script>
+</body>
+</html>

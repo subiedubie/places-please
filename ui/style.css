@@ -114,9 +114,72 @@ html, body {
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- Home ---- */
-.home-top { padding-top: 6vh; }
-.home-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; min-height: 0; }
-.home-mid .card { text-align: center; }
+/* Home is three columns side by side: badges at the left edge, the level and
+   Play button in the middle, badges at the right edge. If a very short
+   screen cannot hold it all, the three columns scroll up and down together. */
+.home-body {
+  flex: 1; min-height: 0;
+  display: flex; align-items: flex-start; gap: 12px;
+  margin: 0 -12px;              /* reach out toward the screen edges, past the app's side padding */
+  padding: 8px 0 6px;           /* room above for the bubbles that stand proud of the top badges */
+  overflow-x: hidden; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* A badge column. --ev-size (badge width) and --ev-gap are set by
+   ui/events.js so that the column fits the height of the screen. */
+.home-side {
+  flex: none; width: var(--ev-size, 58px);
+  display: flex; flex-direction: column; gap: var(--ev-gap, 8px);
+  position: relative; z-index: 1; /* a "+3" may float over the edge of the middle column */
+}
+.home-mid {
+  flex: 1; min-width: 0; align-self: stretch; /* as tall as the screen allows */
+  display: flex; flex-direction: column; gap: 10px;
+}
+/* The title stays at the top; the cards and the Play button sit in the
+   middle of the room that is left (equal empty space above and below). */
+.home-mid > .home-top { margin-bottom: auto; }
+.home-mid::after { content: ''; margin-top: auto; }
+.home-mid > * { flex-shrink: 0; }
+.home-mid .card { text-align: center; padding: 8px 10px; }
+.home-mid .big { font-size: 26px; }
+.home-mid .label { font-size: 11px; letter-spacing: 0.07em; }
+.home-mid .note { font-size: 13px; }
+.home-mid .booster-bar { flex-wrap: wrap; }
+/* The title's box. It keeps one height whether it shows the title or the
+   round banner, so nothing under it jumps when the banner comes and goes. */
+.home-top { position: relative; height: 52px; display: flex; align-items: center; justify-content: center; }
+.home-top .title { font-size: 23px; line-height: 1.1; }
+/* The coins card: the word on the left, the number on the right. */
+.coins-card { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.home-mid .coins-card { text-align: left; padding: 8px 14px; }
+/* The round banner, shown for a few seconds after a level: "Level 23 won",
+   "+175 coins", and a "details" link. Tapping it sends it away. */
+.home-round {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 2px 0 12px;
+  border-radius: 14px; border: 1.5px solid #0b8a48;
+  background: #dff3e7; color: #0b4f2b;
+  text-align: left; cursor: pointer;
+  animation: round-in 0.3s ease-out;
+}
+.home-round.lost { background: var(--panel); color: var(--text); border-color: var(--line); }
+.home-round-text { flex: 1; min-width: 0; }
+.home-round-title { font-weight: 800; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-round-coins { font-weight: 600; font-size: 13px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-round-details {
+  appearance: none; -webkit-appearance: none;
+  flex: none; min-width: 56px; min-height: 44px; padding: 0 8px;
+  border: 0; background: none; color: inherit;
+  font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline;
+  touch-action: manipulation;
+}
+@keyframes round-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
 .home-bottom { display: flex; justify-content: center; }
 .home-bottom .btn { min-width: 160px; }
 #home-reminder { text-align: center; }
@@ -227,7 +290,7 @@ html, body {
 @media (max-height: 700px) {
   .screen { gap: 8px; }
   .title { font-size: 28px; }
-  .home-top { padding-top: 2vh; }
+  .home-mid { gap: 8px; }
   .big { font-size: 28px; }
   .btn { min-height: 44px; }
   .btn.tall { min-height: 54px; }
@@ -237,5 +300,6 @@ html, body {
 /* People who ask their phone for less motion get no shake. */
 @media (prefers-reduced-motion: reduce) {
   #board.shake { animation: none; }
+  .home-round { animation: none; }
   .btn { transition: none; }
 }

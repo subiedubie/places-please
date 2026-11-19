@@ -58,13 +58,15 @@ export function createScreens(theme) {
   // gift: what the win streak gives the next level, from session.nextGift():
   //       { powers: ['spot-h', ...], superPrism: true/false }. Leave it out
   //       (or pass null) to show nothing.
-  function home(save, tier, resuming, gift) {
+  // retry: true if the last try at this level was lost (the button says Retry).
+  function home(save, tier, resuming, gift, retry) {
     $('home-title').textContent = theme.name;
     $('home-tier').textContent = tierName(tier) || 'Next up';
     $('home-level').textContent = 'Level ' + num(save.level);
+    stopCoinTick(); // a count-up still running would write over the new number
     $('home-coins').textContent = num(save.coins);
-    $('home-streak').textContent = num(save.streak);
-    $('home-play').textContent = resuming ? 'Continue' : 'Play';
+    // (The win streak has no box of its own: it shows as the gift card below.)
+    $('home-play').textContent = resuming ? 'Continue' : (retry ? 'Retry' : 'Play');
 
     // The streak gift: the free power-ups the next level starts with, and
     // whether the Super Magic Ball is on.
@@ -98,6 +100,68 @@ export function createScreens(theme) {
     } else {
       reminder.hidden = true;
     }
+  }
+
+  // ---- Home, right after a level: the coins counting up, and the banner ----
+
+  const COIN_TICK_MS = 1000;   // how long the coin count takes to climb
+  const BANNER_MS = 7000;      // how long the round banner stays before it leaves by itself
+
+  // People who ask their phone for less motion get the final numbers at once.
+  const lessMotion = () => Boolean(window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  let coinTick = 0; // the running count-up, so it can be stopped
+  function stopCoinTick() {
+    if (coinTick) cancelAnimationFrame(coinTick);
+    coinTick = 0;
+  }
+
+  // Count the coins card up from `from` to `to` over about a second.
+  function tickCoins(from, to) {
+    stopCoinTick();
+    const el = $('home-coins');
+    if (lessMotion() || from === to) { el.textContent = num(to); return; }
+    const began = performance.now();
+    el.textContent = num(from);
+    const step = (t) => {
+      const part = Math.min(1, (t - began) / COIN_TICK_MS);
+      const eased = 1 - (1 - part) * (1 - part); // quick at first, slowing at the end
+      el.textContent = num(Math.round(from + (to - from) * eased));
+      coinTick = part < 1 ? requestAnimationFrame(step) : 0;
+    };
+    coinTick = requestAnimationFrame(step);
+  }
+
+  // The banner in the title's place: "Level 23 won", "+175 coins", details.
+  // It leaves after a few seconds or when tapped. onDetails: what the
+  // "details" link does.
+  let bannerTimer = 0;
+  function hideRoundBanner() {
+    clearTimeout(bannerTimer);
+    // Guarded: an older copy of the page (mid-update on the phone) has no banner.
+    const banner = $('home-round');
+    const title = $('home-title');
+    if (banner) banner.hidden = true;
+    if (title) title.style.visibility = '';
+  }
+  function roundBanner(result, levelN, onDetails) {
+    const won = result.status === 'won';
+    const coins = (result.settlement && result.settlement.coins) || 0;
+    const box = $('home-round');
+    box.classList.toggle('won', won);
+    box.classList.toggle('lost', !won);
+    $('home-round-title').textContent = `Level ${num(levelN)} ${won ? 'won' : 'lost'}`;
+    $('home-round-coins').textContent = coins > 0 ? `+${num(coins)} coins` : 'No coins this time';
+    box.hidden = false;
+    $('home-title').style.visibility = 'hidden'; // the banner covers the title
+    box.onclick = hideRoundBanner; // a tap anywhere on it sends it away
+    $('home-round-details').onclick = (e) => {
+      e.stopPropagation(); // do not also dismiss the banner
+      onDetails();
+    };
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(hideRoundBanner, BANNER_MS);
   }
 
   // ---- Level: the bar above the board ----
@@ -152,7 +216,14 @@ export function createScreens(theme) {
     $('results-title').textContent = won ? 'Won' : 'Lost';
     $('results-next').textContent = won ? 'Next' : 'Retry';
 
-    const box = $('results-lines');
+    coinLines(result, $('results-lines'));
+  }
+
+  // The coin lines of a finished level ("Level won +50 ... Total 175 coins"),
+  // written into `box`. Used by the Results screen and by the details sheet
+  // that opens from the banner on Home.
+  function coinLines(result, box) {
+    const won = result.status === 'won';
     box.textContent = '';
     const addLine = (label, value, cls) => {
       const row = document.createElement('div');
@@ -205,5 +276,5 @@ export function createScreens(theme) {
     });
   }
 
-  return { show, home, hud, results, settings, confirm, $ };
+  return { show, home, hud, results, coinLines, tickCoins, roundBanner, hideRoundBanner, settings, confirm, $ };
 }

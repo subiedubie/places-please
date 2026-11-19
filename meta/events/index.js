@@ -210,7 +210,8 @@ export function createEvents(getSave, rewards, events = EVENTS) {
       for (const inst of Object.values(ev.instances)) {
         const cfg = events[inst.key];
         const text = MECHANICS[cfg.type].onLevel(inst, cfg, res, ctxFor(inst, cfg, now));
-        if (text) eventLines.push({ title: cfg.title, text });
+        // (id lets Home find this event's badge to show the "+3" on it)
+        if (text) eventLines.push({ id: inst.id, title: cfg.title, text });
       }
       // Remember a lost level, so the next try at it is not a first attempt.
       ev.failedLevel = result.won ? 0 : result.level;

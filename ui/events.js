@@ -1,5 +1,6 @@
-// EVENTS SCREENS: the grid of side-game badges on Home (the pictures are
-// drawn by ui/eventicons.js), the detail sheet of each side
+// EVENTS SCREENS: the two columns of side-game badges down the left and
+// right edges of Home (the pictures are drawn by ui/eventicons.js), the
+// "+3" each badge shows right after a level, the detail sheet of each side
 // game, the rewards tray, the card album, the timed-boost banners, the extra
 // lines on Results and the "Rival toughness" choice in Settings.
 //
@@ -8,8 +9,9 @@
 // Every call to the session is guarded, so the screens still work (and show
 // "No events yet") while that logic is missing or returns nothing.
 //
-// index.html holds four empty boxes this file fills:
-//   #home-events      under the Play button
+// index.html holds these empty boxes this file fills:
+//   #home-left, #home-right   the badge columns at the two edges of Home
+//   #home-events      under the Play button (timed boosts that are running)
 //   #level-boost      in the bar above the board
 //   #results-events   under the coin lines
 //   #settings-rivals  in Settings
@@ -71,7 +73,14 @@ const SHORT_NAMES = {
   callsheet: 'Call Sheet',
 };
 
-const BADGE_PX = 68;                 // how wide a badge picture is on Home
+const BADGE_PX = 60;                 // how wide a badge picture is on Home at most (and how sharply it is drawn)
+const BADGE_MIN_PX = 40;             // the smallest it may shrink to on a short screen
+const PILL_PX = 18;                  // the timer pill under a badge, with its small gap (see .ev-b-time)
+const GAP_MIN_PX = 4;                // the least and the most room between two badges in a column
+const GAP_MAX_PX = 28;
+const GAIN_START_MS = 450;           // after a level: the wait before the first "+3" pops in
+const GAIN_STEP_MS = 150;            // ...and the wait between one badge's "+3" and the next
+const GAIN_FLOAT_MS = 1500;          // how long a "+3" floats (keep the same as ev-plus in ui/events.css)
 const HERO_PX = 88;                  // how wide it is at the top of a detail sheet
 const REFRESH_MS = 20 * 1000;        // how often standings are asked for again
 const GOLD = '#e0a100';
@@ -417,9 +426,10 @@ export function createEvents(session, onChange) {
     return pic;
   }
 
-  // One badge of the Home grid: the round picture, a short name under it,
-  // then the time left. `o` holds:
-  //   ev      what to draw ({ id, type })      name   the word under the picture
+  // One badge of a Home column: the round picture with a small timer pill
+  // under it. (The name is not written out; a screen reader still says it.)
+  // `o` holds:
+  //   ev      what to draw ({ id, type })      name   its name (for screen readers)
   //   bubble  text for the top-right bubble    count  true = red number bubble
   //   start   true = show the pulsing "Start" pill instead of the bubble
   //   dot     true = show the small red dot    time   the element for the time line
@@ -433,25 +443,35 @@ export function createEvents(session, onChange) {
     if (o.start) pic.appendChild(h('span', 'ev-b-start', TEXT.start));
     else if (o.bubble) pic.appendChild(h('span', 'ev-b-bubble' + (o.count ? ' count' : ''), o.bubble));
     if (o.dot) pic.appendChild(h('span', 'ev-b-dot'));
-    btn.append(pic, h('span', 'ev-b-name', o.name), o.time || h('span', 'ev-b-time'));
+    btn.append(pic, o.time || h('span', 'ev-b-time'));
+    btn.dataset.ev = String(o.ev.id); // lets the "+3" after a level find this badge
     btn.onclick = o.onTap;
     return btn;
   }
 
-  // ---- Home: the boost banner, then the grid of badges ----
-  // Rewards and the Playbill album come first, then every event in the order
-  // the Session gives them (ending soonest first), four badges across.
-  function drawHome() {
+  // ---- Home: the two columns of badges, and the boost banner ----
+  // Rewards heads the left column and the Playbill album the right one; then
+  // every event in the order the Session gives them (ending soonest first),
+  // dealt out left, right, left, right.
+  // `round` is given only right after a level (see home() below): the badges
+  // that gained something then show their "+3".
+  function drawHome(round) {
     const mount = $('home-events');
-    if (!mount) return;
+    const left = $('home-left');
+    const right = $('home-right');
+    if (!mount || !left || !right) return;
     const t = now();
     mount.textContent = '';
+    left.textContent = '';
+    right.textContent = '';
 
     const banner = h('div', 'ev-boosts');
     drawBoosts(banner, false);
     mount.appendChild(banner);
 
-    const grid = h('div', 'ev-badges');
+    // Badges are handed to `grid` in order; it deals them into the two columns.
+    let dealt = 0;
+    const grid = { appendChild(b) { (dealt++ % 2 === 0 ? left : right).appendChild(b); } };
 
     // Rewards: the bubble is the number waiting; the time line counts down
     // to the first one that would expire.
@@ -483,8 +503,121 @@ export function createEvents(session, onChange) {
 
     const events = getEvents(t);
     for (const ev of events) grid.appendChild(eventBadge(ev));
-    mount.appendChild(grid);
     if (!events.length) mount.appendChild(h('p', 'note ev-empty', TEXT.noEvents));
+    fitBadges();
+    if (round) showGains(round, events, tray.length);
+  }
+
+  // Choose the badge size and the gap between badges so that the longer
+  // column fits the height of the screen without scrolling. The pictures are
+  // drawn once at BADGE_PX and only shown smaller, so nothing is repainted.
+  function fitBadges() {
+    const body = $('home-body');
+    const left = $('home-left');
+    const right = $('home-right');
+    if (!body || !left || !right || !body.clientHeight) return; // Home is not showing
+    const n = Math.max(left.children.length, right.children.length, 1);
+    const room = body.clientHeight - 14; // less the padding above and below the columns
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const size = clamp(Math.floor((room - (n - 1) * GAP_MIN_PX) / n) - PILL_PX, BADGE_MIN_PX, BADGE_PX);
+    const gap = n > 1
+      ? clamp(Math.floor((room - n * (size + PILL_PX)) / (n - 1)), GAP_MIN_PX, GAP_MAX_PX)
+      : GAP_MIN_PX;
+    body.style.setProperty('--ev-size', size + 'px');
+    body.style.setProperty('--ev-gap', gap + 'px');
+  }
+  if (typeof window !== 'undefined') window.addEventListener('resize', fitBadges);
+
+  // ---- Right after a level: what each badge gained ----
+
+  // What every badge shows just BEFORE a level is settled, so that Home can
+  // start from the old numbers and tick over to the new ones.
+  // Gives back { bubbles: { event id: bubble text }, tray: number waiting }.
+  function snapshot() {
+    const t = now();
+    const bubbles = {};
+    for (const ev of getEvents(t)) bubbles[ev.id] = stateWord(ev.state) || bubbleText(ev);
+    return { bubbles, tray: getTray(t).length };
+  }
+
+  // The words that float beside a badge: "+3" when the line starts with a
+  // number ("+3 collected"); for a fraction ("4/7") the difference from the
+  // old bubble ("+1"); a small sparkle when there is no number; '' when the
+  // line reports a loss ("Streak lost") and nothing should float.
+  function gainText(line, oldBubble) {
+    const text = String(line.text || '');
+    if (/lost/i.test(text)) return '';
+    const plus = text.match(/^\+\s*(\d[\d,]*)/);
+    if (plus) return '+' + plus[1];
+    const frac = text.match(/^(\d+)\s*\/\s*(\d+)/);
+    const was = String(oldBubble || '').match(/^(\d+)\/(\d+)$/);
+    if (frac && was && frac[2] === was[2]) {
+      const diff = Number(frac[1]) - Number(was[1]);
+      return diff > 0 ? '+' + diff : '';
+    }
+    if (frac && Number(frac[1]) === 0) return ''; // back to nothing: not a gain
+    return '✦';
+  }
+
+  const lessMotion = () => typeof window !== 'undefined' && !!window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // round = { result, before }: what session.finish() returned, and the
+  // snapshot() taken just before it. Each badge with a line in
+  // result.eventLines goes back to its old bubble; then, one badge after
+  // another down the left column and then the right, its "+3" pops in and
+  // the bubble changes to the new number. Last, the Rewards badge bounces if
+  // new prizes went into the tray.
+  function showGains(round, events, trayNow) {
+    if (lessMotion()) return; // the new numbers are already showing; nothing floats
+    const result = round.result || {};
+    const before = round.before || { bubbles: {}, tray: trayNow };
+    const lineOf = {};
+    for (const line of list(result.eventLines)) if (line && line.id) lineOf[line.id] = line;
+    const badges = [...$('home-left').children, ...$('home-right').children];
+
+    let step = 0;
+    for (const btn of badges) {
+      const line = lineOf[btn.dataset.ev];
+      if (!line) continue;
+      const bubble = btn.querySelector('.ev-b-bubble');
+      const newText = bubble ? bubble.textContent : '';
+      const oldText = before.bubbles[btn.dataset.ev];
+      if (bubble && oldText) bubble.textContent = oldText; // start from the old number
+      const words = gainText(line, oldText);
+      setTimeout(() => {
+        if (bubble) {
+          bubble.textContent = newText;
+          bubble.classList.add('ev-b-bump'); // a small swell as the number changes
+        }
+        if (words) floatBeside(btn, words);
+      }, GAIN_START_MS + step * GAIN_STEP_MS);
+      step++;
+    }
+
+    // The Rewards badge: back to the old count, then the new one with a bounce.
+    const fresh = list(result.newRewards).length;
+    const rewardsBtn = badges.find((b) => b.dataset.ev === 'rewards');
+    if (fresh && rewardsBtn) {
+      const bubble = rewardsBtn.querySelector('.ev-b-bubble');
+      if (bubble && before.tray > 0) bubble.textContent = String(before.tray);
+      else if (bubble) bubble.style.visibility = 'hidden'; // there was none before
+      setTimeout(() => {
+        if (bubble) { bubble.textContent = String(trayNow); bubble.style.visibility = ''; }
+        const pic = rewardsBtn.querySelector('.ev-b-pic');
+        if (pic) pic.classList.add('ev-b-bounce');
+      }, GAIN_START_MS + step * GAIN_STEP_MS);
+    }
+  }
+
+  // The little "+3" that pops in beside a badge, floats up and fades.
+  function floatBeside(btn, words) {
+    const pic = btn.querySelector('.ev-b-pic');
+    if (!pic) return;
+    const el = h('span', 'ev-b-plus', words);
+    el.setAttribute('aria-hidden', 'true');
+    pic.appendChild(el);
+    setTimeout(() => el.remove(), GAIN_FLOAT_MS + 100);
   }
 
   // The word for a finished state, or '' while an event is still open.
@@ -910,10 +1043,29 @@ export function createEvents(session, onChange) {
 
   // ---- Called by ui/main.js when a screen is shown ----
 
-  // Home is being shown: fill the banner, the buttons and the event list.
-  function home() {
+  // Home is being shown: fill the boost banner and the two badge columns.
+  // Call this AFTER Home is on screen (the badges are sized to its height).
+  // round: leave out normally. Right after a level pass
+  //   { result: what session.finish() returned, before: snapshot() from just before it }
+  // and the badges that gained something show it.
+  function home(round) {
     lastRefresh = now();
-    drawHome();
+    drawHome(round || null);
+  }
+
+  // The sheet behind the "details" link of the round banner on Home: the
+  // coin lines and the event lines the old Results screen showed.
+  //   fillCoins(box) writes the coin lines into a box (ui/screens.js does it).
+  function openRound(result, levelN, fillCoins) {
+    openSheet({
+      render(body) {
+        const coins = h('div', 'card lines');
+        safe(() => fillCoins(coins), null);
+        body.appendChild(coins);
+        resultsInto(body, result);
+        return `Level ${num(levelN)} ${result && result.status === 'won' ? 'won' : 'lost'}`;
+      },
+    });
   }
 
   // The Level screen is being shown: fill the boost banner. Call this BEFORE
@@ -930,9 +1082,15 @@ export function createEvents(session, onChange) {
     const mount = $('results-events');
     if (!mount) return;
     mount.textContent = '';
+    mount.hidden = !resultsInto(mount, result);
+  }
+
+  // Add the event lines and the new rewards of a finished level to `mount`
+  // (the Results screen, or the details sheet). Gives back false if there
+  // was nothing to add.
+  function resultsInto(mount, result) {
     const lines = list(result && result.eventLines);
     const fresh = list(result && result.newRewards);
-    mount.hidden = lines.length === 0 && fresh.length === 0;
 
     if (lines.length) {
       const card = h('div', 'card lines ev-lines');
@@ -957,6 +1115,7 @@ export function createEvents(session, onChange) {
       card.appendChild(open);
       mount.appendChild(card);
     }
+    return lines.length > 0 || fresh.length > 0;
   }
 
   // Settings is being shown: the Rival toughness choice.
@@ -980,5 +1139,5 @@ export function createEvents(session, onChange) {
     mount.append(seg, h('p', 'note', TEXT.rivalsNote));
   }
 
-  return { home, level, results, settings, openTray, openAlbum, openDetail, closeSheet, renderReward };
+  return { home, snapshot, openRound, level, results, settings, openTray, openAlbum, openDetail, closeSheet, renderReward };
 }

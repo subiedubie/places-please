@@ -45,8 +45,8 @@ export const theme = {
 
   // Colors used to draw the power-ups.
   powerColors: {
-    tile: '#fff1c2',     // the pale gold tile every power-up sits on
-    tileEdge: '#e0a100', // the thin gold line around that tile
+    tile: '#ffe07a',     // the gold tile every power-up sits on
+    tileEdge: '#a86a00', // the dark gold line around that tile
     glow: 'rgba(255, 196, 0, 0.3)', // the soft gold glow around that tile
     missile: '#d92b2b',  // the Missile arrow
     missileLight: 'rgba(255, 255, 255, 0.4)', // the lit top half of the arrow
@@ -71,38 +71,28 @@ export const theme = {
   // Colors used to draw the obstacles (the drawings are in ui/render.js;
   // the obstacle names and rules are in config/obstacles.js).
   obstacleColors: {
-    wood: '#d9a066',      // Crate boards, Scenery Flat frame
-    woodDark: '#8a5a2b',  // Crate edges and slats
-    hatbox: '#fbe3ea',    // Hatbox body
-    hatStripe: '#e0559a', // Hatbox stripes and lid
+    wood: '#d9a066',      // Crate boards
+    woodDark: '#8a5a2b',  // Crate outline, the Dovecote perch
     trunk: '#6b3f2a',     // Trunk body
     strap: '#d9b382',     // Trunk straps
     brass: '#e0a100',     // latches, the Padlock body, the Strongbox dial, coins
     tin: '#c3cad6',       // Paint Can metal, Strongbox handle
     shackle: '#6f7a8c',   // the steel hoop of the Padlock
     paintNone: '#8c95a6', // a Paint Can shown without a color (target picture)
-    ice: '#cfeafc',       // Dry Ice block
-    iceEdge: '#7fc1ee',   // Dry Ice outline and frost marks
+    ice: '#cfeafc',       // the pale blue disc behind the Dove picture
     cashbox: '#6f8296',   // Cash Box metal
-    brick: '#c8553d',     // Scenery Flat bricks
-    mortar: '#f3d9c9',    // lines between the bricks
-    safe: '#2f3645',      // Strongbox body
+    safe: '#2f3645',      // Strongbox body, the Footlights panel
     safeDoor: '#454e61',  // Strongbox door
     bag: '#1f8a8a',       // Costume Bag
-    cord: '#fff1c2',      // Costume Bag drawstring
     sack: '#d8b98a',      // Sandbag
     sackDark: '#8a6a3c',  // Sandbag tie, seams and arrow
     ink: '#1b2030',       // dark details: slots, keyholes, cracks, hit pips
     // Batch 2 (docs/OBSTACLES2.md)
-    confettiTint: '#fff4c7', // cell tint under Confetti
-    confettiEdge: '#f2b705', // the line around a Confetti cell
-    confettiA: '#e5383b',    // the four Confetti dot colors
+    confettiEdge: '#f2b705', // the line around the small Confetti target picture
+    confettiA: '#e5383b',    // the Confetti colors: its border dashes and its dots
     confettiB: '#1f9de0',
     confettiC: '#17a35a',
     confettiD: '#f08a00',
-    petalTint: '#ffe3ee',    // cell tint under Petals
-    petal: '#f58fb3',        // Petals, and the line around a Petals cell
-    petalDark: '#e0608f',    // every third petal
     leaf: '#3faa55',         // Planter and Bouquet foliage
     leafDark: '#2a8244',     // darker foliage, flower stems
     flowerA: '#f25c8a',      // flower colors (Planter, Bouquet)
@@ -119,15 +109,44 @@ export const theme = {
     boothStripe: '#e5484d',  // Ticket Booth stripes
     boothGlass: '#27405e',   // Ticket Booth window when open
     glass: '#e3f3fd',        // glass: Candy Jar, Popcorn Cart box, case mirror
-    popcorn: '#fff0b8',      // popcorn
     wrap: '#fdf1d6',         // Bouquet paper
     wrapEdge: '#d9b382',     // Bouquet paper outline
-    ringOn: '#e0a100',       // a lit piece of the progress ring
-    ringOff: '#d3dae5',      // an unlit piece of the progress ring
-    casePink: '#f277a6',     // Makeup Case body (open)
-    caseLid: '#fbd0e0',      // Makeup Case lid and tray (open)
-    caseShut: '#b4bcc9',     // Makeup Case when closed
-    velvet: '#b3202e',       // Curtain (mixed with its piece color)
+    caseLid: '#fbd0e0',      // Makeup Case tray (open)
+    velvet: '#b3202e',       // Curtain shown without a color (target picture)
+    // The clearer artwork (18 Nov. 2026). Every obstacle gets a dark outline;
+    // that outline color is worked out from the colors here (a darker shade).
+    crateFrame: '#b9783c',   // Crate: the darker middle panel
+    hatWhite: '#fffaf0',     // Hatbox body
+    hatBlack: '#2b2f3a',     // Hatbox stripes
+    hatLid: '#f06aa5',       // Hatbox lid and knob
+    trunkDark: '#4a2a1b',    // Trunk: the line where the lid closes
+    iceLight: '#9fe0ff',     // Dry Ice: the paler face of the block
+    iceBody: '#46b4ee',      // Dry Ice: the block itself
+    iceLine: '#0f5687',      // Dry Ice and glass outlines
+    fireworkBox: '#c8324a',  // Fireworks crate
+    stone: '#c9c0b2',        // Scenery Flat: the wall blocks
+    stoneLight: '#e6dfd3',   // Scenery Flat: the lit top of each block
+    stoneGap: '#4d463d',     // Scenery Flat: the gaps between blocks and the outline
+    safeInside: '#0b0e18',   // Strongbox: the inside, once the door is blown open
+    bagLight: '#35b3ad',     // Costume Bag: the lit side
+    gold: '#ffc400',         // gold: stars, the power-only badge, light leaking from a torn bag
+    chain: '#9aa5b8',        // Padlock chains
+    chainDark: '#2f3645',    // Padlock chain outline
+    sackBand: '#6e5226',     // Sandbag: the tie and the outline of its arrow
+    pot: '#d0683c',          // Planter pot
+    potRim: '#e58a5a',       // Planter pot rim
+    candyA: '#ff6fa8',       // Candy Jar candies
+    candyB: '#ffd23f',
+    candyC: '#3fd0b0',
+    hat: '#262b3a',          // Top Hat
+    caseEdge: '#7a1f58',     // Makeup Case outline
+    caseOpen: '#e0409a',     // Makeup Case when open
+    caseClosed: '#a58d9c',   // Makeup Case when closed (dull on purpose)
+    badge: '#1b2030',        // the round "hits left" badge
+    badgeText: '#ffffff',    // the number on it
+    confettiFill: '#ffe066', // the strong yellow of a Confetti cell
+    petalFill: '#ffb3d1',    // the strong pink of a Petals cell
+    petalEdge: '#d92e78',    // the scalloped border of a Petals cell
   },
 
   // Difficulty tier names, easiest first.
@@ -172,7 +191,12 @@ export const theme = {
     panel: '#f6f8fb',      // boxes and cards
     tray: '#e6ebf2',       // the board tray behind the cells, and plain buttons
     line: '#d3dae5',       // thin outlines around boxes and quiet buttons
-    cell: '#ffffff',       // the square behind each piece on the board
+    cell: '#ffffff',       // white squares elsewhere on the page (not the board)
+    // The board. Only the cells you can play on get the tray; a spot where
+    // gems never go (a "hole") shows the page background instead.
+    board: '#8497bd',      // the tray under the playable cells
+    boardEdge: '#2b3654',  // the dark line around the tray, and around every hole
+    boardCell: '#dde5f3',  // the lighter square inside each playable cell
     text: '#1b2030',       // main text
     dim: '#5c6478',        // quieter text
     accent: '#c62f2f',     // the main button and highlights (curtain red)
