@@ -155,6 +155,18 @@ export function syncTargets(game) {
     const lying = (game.board.floor || []).filter((f) => f === 'petals').length;
     p.need = p.have + lying + (tor ? tor.need - tor.have : 0) * game.board.rows;
   }
+  // Things thrown onto the board: those there now, and those still to come.
+  // (A crowded board may have no room for one.)
+  const count = (kind, each = () => 1) => cellsWhere(game.board, (c) => isBlock(c) && c.kind === kind).reduce((n, q) => n + each(get(game.board, q.x, q.y)), 0);
+  for (const [kind, from, each] of [['mask', 'maskrack', (c) => c.w || 1], ['giftbox', 'dressing', () => 3], ['cashbox', 'grandsafe', () => 4]]) {
+    const m = game.targets.find((x) => x.block === kind);
+    if (m && game.targets.some((x) => x.block === from)) m.need = m.have + count(kind) + count(from, each);
+  }
+  // Petals from flower carts: those lying, and a row for each cart to come.
+  if (p && game.targets.some((x) => x.block === 'flowercart')) {
+    const lying = (game.board.floor || []).filter((f) => f === 'petals').length;
+    p.need = p.have + lying + count('flowercart') * game.board.cols;
+  }
   // Spilled paint: what lies there now, and nine squares for each pot to come.
   const g = game.targets.find((x) => x.block === 'goo');
   if (g) g.need = g.have + countKind(game.board, 'goo') + 9 * countKind(game.board, 'greasepot');

@@ -35,7 +35,7 @@
 import {
   block,
   EMPTY, get, set, inBounds, cloneBoard, isPiece, isPower, power,
-  isBlock, isPart, isDrop, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor, isPainted, spreadPaint,
+  isBlock, isPart, isDrop, obstacleDef, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor, isPainted, spreadPaint,
 } from './board.js';
 
 // The name a cell goes by inside the "already fired" and "already cleared" sets.
@@ -353,7 +353,8 @@ function runSpecial(run, item) {
   } else if (kind === 'bigblast') {
     // A round blast, four and a half squares in every direction.
     const cx = x + (w - 1) / 2;
-    clearArea(run, allCells(board).filter((p) => Math.hypot(p.x - cx, p.y - y) <= 4.5), 'fireworks');
+    const cy = y + (h - 1) / 2;
+    clearArea(run, allCells(board).filter((p) => Math.hypot(p.x - cx, p.y - cy) <= 4.5), 'fireworks');
   } else if (kind === 'rocket') {
     const to = flyAndClear(run, { x, y }, 'rocket');
     if (to) [...run.events].reverse().find((e) => e.type === 'fly').look = 'rocket';
@@ -372,21 +373,82 @@ function runSpecial(run, item) {
     for (let i = 0; i < item.count && free.length; i++) {
       const p = free.splice(rng ? rng.int(free.length) : 0, 1)[0];
       set(board, p.x, p.y, block(item.what));
-      run.events.push({ type: 'fly', from: { x: x + 0.5, y: y + 0.5 }, to: p, look: item.what, lands: true });
+      run.events.push({ type: 'fly', from: { x: x + (w - 1) / 2, y: y + (h - 1) / 2 }, to: p, look: item.what, lands: true });
     }
   } else if (kind === 'spike') {
     const barrels = allCells(board).filter((p) => {
       const c = get(board, p.x, p.y);
-      return isBlock(c) && c.charge > 0;
+      return isBlock(c) && c.charge > 0 && c.kind === (item.feeds || 'barrel');
     });
-    barrels.sort((a, b) => Math.hypot(a.x - x, a.y + 1 - y) - Math.hypot(b.x - x, b.y + 1 - y));
+    const mid = (p) => {
+      const c = get(board, p.x, p.y);
+      return { x: p.x + ((c.w || 1) - 1) / 2, y: p.y + ((c.h || 1) - 1) / 2 };
+    };
+    const far = (p) => Math.hypot(mid(p).x - x, mid(p).y - y);
+    barrels.sort((a, b) => far(a) - far(b));
     const at = barrels[0];
     if (at) {
       const c = get(board, at.x, at.y);
       const charge = c.charge - 1;
       set(board, at.x, at.y, { ...c, charge });
-      run.events.push({ type: 'fly', from: { x, y }, to: { x: at.x, y: at.y + 1 }, look: 'spike' });
-      if (charge === 0) run.queue.push({ special: true, kind: 'roll', x: at.x, y: at.y, w: 1, h: c.h || 1 });
+      run.events.push({ type: 'fly', from: { x, y }, to: mid(at), look: item.look || 'spike' });
+      if (charge === 0) run.queue.push({ special: true, kind: 'release', x: at.x, y: at.y, w: c.w || 1, h: c.h || 1 });
+    }
+  } else if (kind === 'release') {
+    // Something charged is full.
+    const c = get(board, x, y);
+    if (!isBlock(c)) return;
+    const how = obstacleDef(c.kind).release || 'roll';
+    if (how === 'roll') { runSpecial(run, { ...item, kind: 'roll' }); return; }
+    for (const p of footprint(c, x, y)) set(board, p.x, p.y, EMPTY);
+    run.events.push({ type: 'block', x, y, kind: c.kind, hpLeft: 0, destroyed: true, by: 'power', w, h });
+    for (const p of footprint(c, x, y)) {
+      const lifted = liftFloor(board, p.x, p.y);
+      if (lifted) run.events.push(lifted);
+    }
+    if (how === 'bigblast') runSpecial(run, { ...item, kind: 'bigblast' });
+    if (how === 'shatter') {
+      // Glass flies to every corner: everything on the board is hit once.
+      run.events.push({ type: 'storm', x: x + (w - 1) / 2, y: y + (h - 1) / 2, cells: allCells(board).filter((p) => isBlock(get(board, p.x, p.y))) });
+      clearArea(run, allCells(board), 'shatter');
+    }
+  } else if (kind === 'launch') {
+    // A flying rig has come down and takes off again: its whole column.
+    run.events.push({ type: 'beam', x, y, w: 1, h: 0, up: true });
+    clearArea(run, colCells(board, x), 'beam');
+  } else if (kind === 'laser') {
+    // Its middle row, and the three columns where it helps most.
+    const my = y + Math.floor(h / 2);
+    const score = (cx) => colCells(board, cx).reduce((n, p) => {
+      const c = get(board, p.x, p.y);
+      const at = isPart(c) ? get(board, c.ax, c.ay) : c;
+      return n + (opts.needs && at && at.t !== 'empty' && (!isBlock(at) || takesHit(at, 'power')) && opts.needs(at, p.x, p.y) ? 1 : 0);
+    }, 0);
+    const cols = Array.from({ length: board.cols }, (_, i) => ({ i, s: score(i) + (rng ? rng.next() * 0.5 : 0) }))
+      .sort((a, b) => b.s - a.s).slice(0, 3).map((c) => c.i);
+    run.events.push({ type: 'beam', x, y: my, w: 0, h: 1, cols, look: 'laser' });
+    clearArea(run, [...rowCells(board, my), ...cols.flatMap((c) => colCells(board, c))], 'beam');
+  } else if (kind === 'storm') {
+    // Lightning strikes things the level needs, anywhere; then any gems.
+    const good = [];
+    const rest = [];
+    for (const p of allCells(board)) {
+      const c = get(board, p.x, p.y);
+      if (isBlock(c) ? takesHit(c, 'power') : isPiece(c)) (opts.needs && opts.needs(c, p.x, p.y) ? good : rest).push(p);
+    }
+    const hit = [];
+    for (const list of [good, rest]) {
+      while (hit.length < item.count && list.length) hit.push(list.splice(rng ? rng.int(list.length) : 0, 1)[0]);
+    }
+    run.events.push({ type: 'storm', x: x + (w - 1) / 2, y: y + (h - 1) / 2, cells: hit });
+    clearArea(run, hit, 'storm');
+  } else if (kind === 'bursts') {
+    // Fireballs: each lands where it helps most and goes off round it.
+    for (let i = 0; i < item.count; i++) {
+      const to = chooseTarget(run, (tx, ty) => squareCells(tx, ty, 1));
+      if (!to) break;
+      run.events.push({ type: 'fly', from: { x, y }, to, look: item.look });
+      clearArea(run, squareCells(to.x, to.y, 1), 'burst');
     }
   } else if (kind === 'roll') {
     // The barrel rolls across the board: everything in its rows is hit twice.

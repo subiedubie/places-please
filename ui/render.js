@@ -907,6 +907,8 @@ const BIG_SIZE = {
   planter: [2, 2], dovecote: [2, 2], footlights: [2, 2],
   fireworks: [2, 1], truss: [3, 1], ticketbooth: [3, 1],
   followspot: [2, 2], dressing: [2, 2], rolldrop: [2, 2], barrel: [1, 3],
+  dimmer: [2, 2], chandelier: [2, 2], laser: [1, 3], thunder: [2, 2], maskrack: [2, 1], grandsafe: [2, 2], poster: [4, 2],
+  trophycase: [2, 2], safetycurtain: [4, 3], programs: [2, 2], weight: [1, 5], rocketrack: [1, 3],
 };
 
 // Mix two "#rrggbb" colors: t = 0 gives a, t = 1 gives b.
@@ -1307,6 +1309,7 @@ function drawFloor(ctx, kind, x0, y0, cell, theme, seed) {
 // ---- Small pictures for the targets that are not obstacles themselves. ----
 // Each is drawn around (0, 0) with the usual unit "u".
 const ICONS = {
+  program(ctx, u) { box(ctx, -0.5 * u, -0.7 * u, u, 1.4 * u, 0.1 * u, '#fff4dc', '#4a0424', 2); },
   // Dove: a small white bird on a pale blue disc (so the white shows).
   dove(ctx, u, oc) {
     ctx.fillStyle = oc.ice;
@@ -1503,6 +1506,112 @@ function drawSet(ctx, cell, cx, cy, size, theme, plain) {
     ctx.restore();
     box(ctx, left + s * 0.02, top + s * 0.02, W - s * 0.04, s * 0.2, s * 0.08, '#ffc42a', '#7a4a00', s * 0.04);
     box(ctx, left + s * 0.02, top + H - s * 0.24, W - s * 0.04, s * 0.22, s * 0.1, '#e8eefc', '#3a0a5a', s * 0.04); // the roll
+  } else if (kind === 'maskrack') {
+    const n = plain ? 2 : w;
+    for (let i = 0; i < n; i++) {
+      if (tile(n === 1 ? 'rack-one' : i === 0 ? 'rack-cap' : i === n - 1 ? 'rack-end' : 'rack-mid', i)) continue;
+      box(ctx, left + i * s, top + s * 0.08, s, s * 0.84, s * 0.1, '#c01f4a', '#4a0418', 2);
+    }
+  } else if (kind === 'gel') {
+    // A sheet of colored film in a metal frame; a scratched, empty frame after the first hit.
+    const on = plain || cell.hp > 1;
+    const c = Number.isInteger(cell.color) ? cell.color : 0;
+    box(ctx, left + s * 0.04, top + s * 0.04, s * 0.92, s * 0.92, s * 0.14, '#39415f', '#12162a', s * 0.05);
+    const look = theme.pieces[c] || {};
+    box(ctx, left + s * 0.13, top + s * 0.13, s * 0.74, s * 0.74, s * 0.1, on ? look.color || look.fill || '#ff5fa0' : '#8e96ad', '#12162a', s * 0.03);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    poly(ctx, [[-0.3, -0.36], [-0.06, -0.36], [-0.28, 0.36], [-0.36, 0.36], [-0.36, -0.2]].map(([x, y]) => [x + cx / s, y + cy / s]), s, s, 'rgba(255, 255, 255, 0.35)', null);
+    if (on) drawPiece(ctx, c, cx, cy, s * 0.6, theme);
+    else {
+      ctx.strokeStyle = '#4a516a';
+      ctx.lineWidth = s * 0.06;
+      line(ctx, cx - s * 0.22, cy - s * 0.2, cx + s * 0.2, cy + s * 0.22);
+      line(ctx, cx + s * 0.22, cy - s * 0.16, cx - s * 0.14, cy + s * 0.24);
+    }
+  } else if (kind === 'poster') {
+    // A show poster pasted up piece by piece.
+    const W = (plain ? 4 : w) * s;
+    const H = (plain ? 2 : h) * s;
+    const total = cell.full || 8;
+    const done = plain ? total : total - (cell.charge ?? total);
+    box(ctx, left + s * 0.03, top + s * 0.03, W - s * 0.06, H - s * 0.06, s * 0.16, '#8a4c1e', '#3a1a04', s * 0.06);
+    ctx.save();
+    roundRect(ctx, left + s * 0.14, top + s * 0.14, W - s * 0.28, H - s * 0.28, s * 0.08);
+    ctx.clip();
+    ctx.fillStyle = '#e2c393';
+    ctx.fillRect(left, top, W, H);
+    // The pieces pasted so far: their part of the picture shows.
+    const cols = Math.max(1, Math.round(total / 2));
+    ctx.save();
+    ctx.beginPath();
+    const order = [2, 5, 0, 7, 3, 4, 1, 6];
+    for (let i = 0; i < done; i++) {
+      const at = order[i % 8];
+      ctx.rect(left + (at % cols) * (W / cols), top + Math.floor(at / cols) * (H / 2), W / cols, H / 2);
+    }
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, top, 0, top + H);
+    g.addColorStop(0, '#3a1aa8');
+    g.addColorStop(1, '#e0246e');
+    ctx.fillStyle = g;
+    ctx.fillRect(left, top, W, H);
+    const mx = left + W / 2;
+    const my = top + H * 0.56;
+    ctx.fillStyle = 'rgba(255, 224, 120, 0.4)';
+    for (let i = 0; i < 12; i++) {
+      const a = (i * TAU) / 12;
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx + Math.cos(a) * W, my + Math.sin(a) * W);
+      ctx.lineTo(mx + Math.cos(a + 0.26) * W, my + Math.sin(a + 0.26) * W);
+      ctx.fill();
+    }
+    const star = Array.from({ length: 10 }, (_, i) => {
+      const r = i % 2 ? 0.36 : 0.8;
+      return [Math.sin((i * TAU) / 10) * r + mx / s, -Math.cos((i * TAU) / 10) * r + my / s];
+    });
+    poly(ctx, star, s, s, '#ffd21f', '#7a4a00', s * 0.06);
+    ctx.restore();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(90, 50, 10, 0.45)';
+    ctx.lineWidth = Math.max(1, s * 0.03);
+    for (let i = 1; i < cols; i++) line(ctx, left + (i * W) / cols, top + s * 0.14, left + (i * W) / cols, top + H - s * 0.14);
+    line(ctx, left + s * 0.14, top + H / 2, left + W - s * 0.14, top + H / 2);
+    if (!plain && cell.charge > 0) {
+      ctx.translate(left + W, top + H);
+      hitBadge(ctx, -s * 0.26, -s * 0.26, s * 0.2, cell.charge, oc);
+    }
+  } else if (kind === 'safetycurtain') {
+    // A heavy iron curtain, with five lamps along the top.
+    const W = (plain ? 4 : w) * s;
+    const H = (plain ? 3 : h) * s;
+    const left5 = plain ? 5 : cell.hp;
+    const g = ctx.createLinearGradient(0, top, 0, top + H);
+    g.addColorStop(0, '#2f9aa8');
+    g.addColorStop(1, '#0d4f6a');
+    roundRect(ctx, left + s * 0.04, top + s * 0.04, W - s * 0.08, H - s * 0.08, s * 0.14);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = '#062636';
+    ctx.lineWidth = Math.max(1.5, s * 0.07);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1, s * 0.05);
+    for (let y = top + s * 0.85; y < top + H - s * 0.2; y += s * 0.42) {
+      ctx.strokeStyle = 'rgba(4, 34, 48, 0.55)';
+      line(ctx, left + s * 0.12, y, left + W - s * 0.12, y);
+      ctx.strokeStyle = 'rgba(200, 250, 255, 0.25)';
+      line(ctx, left + s * 0.12, y + s * 0.06, left + W - s * 0.12, y + s * 0.06);
+    }
+    box(ctx, left + s * 0.02, top + s * 0.02, W - s * 0.04, s * 0.5, s * 0.12, '#ffc42a', '#7a4a00', s * 0.05);
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = i < 5 - left5 ? '#fffbe0' : '#7a3a00';
+      dot(ctx, left + W * (0.14 + 0.18 * i), top + s * 0.27, s * 0.13);
+    }
+    const st = Array.from({ length: 10 }, (_, i) => {
+      const r = i % 2 ? 0.28 : 0.62;
+      return [Math.sin((i * TAU) / 10) * r + (left + W / 2) / s, -Math.cos((i * TAU) / 10) * r + (top + H * 0.6) / s];
+    });
+    poly(ctx, st, s, s, '#ffe07a', '#7a4a00', s * 0.05);
   } else if (kind === 'goo') {
     box(ctx, left - s * 0.01, top - s * 0.01, s * 1.02, s * 1.02, s * 0.12, '#ff9a24', null);
     ctx.fillStyle = '#ffc163';
@@ -1529,15 +1638,22 @@ function drawSet(ctx, cell, cx, cy, size, theme, plain) {
     const ph = plain ? (BIG_SIZE[kind] || [1, 1])[1] : h;
     const mx = cx + ((pw - 1) * s) / 2;
     const my = cy + ((ph - 1) * s) / 2;
-    const name = [kind + '-' + hp, kind].find(hasArt);
+    const name = [def.toggles ? kind + (cell.open || plain ? '-open' : '-closed') : '', kind + '-' + hp, kind].find(hasArt);
+    if (kind === 'chandelier') box(ctx, left + s * 0.05, top + s * 0.05, pw * s - s * 0.1, ph * s - s * 0.1, s * 0.3, '#5a1f9e', '#2a0a55', s * 0.07); // a dark ceiling, so the glass shows
     if (!name || !drawArt(ctx, name, mx, my, pw * s, ph * s)) box(ctx, left + s * 0.06, top + s * 0.06, pw * s - s * 0.12, ph * s - s * 0.12, s * 0.14, '#8c95a6', oc.badge, 2);
+    if (kind === 'bubbles' && cell.inside && cell.inside.kind) {
+      ctx.globalAlpha = 0.75; // seen through the foam
+      drawArt(ctx, cell.inside.kind, mx, my, s * 0.6, s * 0.6);
+      ctx.globalAlpha = 1;
+    }
     if (!plain) {
       ctx.translate(mx, my);
       const a = (pw * s) / 2;
       const b = (ph * s) / 2;
       const u = s * 0.42;
       if (def.hits[def.hits.length - hp] === 'power') powerMark(ctx, -a + 0.45 * u, -b + 0.45 * u, 0.38 * u, oc);
-      if (kind === 'barrel' && cell.charge > 0) {
+      if (kind === 'chandelier') hitBadge(ctx, a - 0.45 * u, b - 0.45 * u, 0.42 * u, cell.charge, oc);
+      else if ((kind === 'barrel' || kind === 'weight') && cell.charge > 0) {
         ctx.fillStyle = '#3a1a04';
         ctx.font = '800 ' + Math.round(s * 0.42) + 'px system-ui, sans-serif';
         ctx.textAlign = 'center';
@@ -1687,7 +1803,7 @@ export function drawTargetIcon(ctx, target, size, theme) {
     const oc = theme.obstacleColors || {};
     if (kind === DROPPER.id) drawDrop(ctx, mid, mid, size, theme);
     else if (kind === 'paint_floor') drawPaint(ctx, { cols: 1, rows: 1, paint: [1] }, { originX: 0, originY: 0, cell: size }, true);
-    else if (['propbomb', 'chameleon', 'treasure', 'revolve', 'tortoise'].includes(kind)) {
+    else if (['propbomb', 'chameleon', 'treasure', 'revolve', 'tortoise', 'trophy', 'duck', 'flyer'].includes(kind)) {
       // Twists that are not obstacles.
       drawArt(ctx, kind === 'revolve' ? 'turntable2' : kind, mid, mid, size, size);
     }

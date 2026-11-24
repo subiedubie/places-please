@@ -6,6 +6,7 @@
 // This file only asks it things and shows the answers.
 
 import { createSession } from '../meta/session.js';
+import { finaleSteps } from '../engine/finale.js';
 import { cloneBoard, get } from '../engine/board.js';
 import { theme } from '../config/theme.js';
 import { curtainGroups, curtainMeterBox, drawCurtainMeter, fitCanvas, layoutFor, drawBoard, drawTargetIcon } from './render.js';
@@ -150,14 +151,38 @@ function goHome(round) {
 // A level has ended (won, lost or quit): settle it and go straight back to
 // Home, which shows what it earned. `settle` is session.finish or session.quit.
 async function endLevel(settle) {
-  const levelN = session.game.level.n;
+  if (!session.game) return;
+  const game = session.game;               // (the session lets go of it when it is settled)
+  const levelN = game.level.n;
   const coinsBefore = session.save.coins;  // to count the coins card up from
   const before = eventUi.snapshot();       // what each badge showed before
   const result = settle();
   if (!result) { goHome(); return; }
-  onLevel = false;
+  onLevel = false; // (nothing can be moved from here on)
+  if (result.status === 'won') await finale(game);
   await ui.finish(result, levelN, (box) => eventUi.resultsInto(box, result));
   goHome({ result, levelN, coinsBefore, before });
+}
+
+// After a win the moves left over become power-ups and all go off. A tap skips it.
+async function finale(game) {
+  let skip = false;
+  const stop = () => { skip = true; };
+  busy = true;
+  addEventListener('pointerdown', stop);
+  try {
+    let was = cloneBoard(game.board);
+    for (const events of finaleSteps(game)) {
+      if (skip) break;
+      await playEvents(events, drawFrame, theme, 'fast', was);
+      was = events.filter((e) => e.type === 'frame').pop()?.board || was;
+    }
+  } catch (err) {
+    console.error(err); // (it is only for show)
+  } finally {
+    removeEventListener('pointerdown', stop);
+    busy = false;
+  }
 }
 
 function goLevel() {

@@ -138,7 +138,7 @@ test('the second act comes on when the first is cleared', () => {
 
 test('set pieces come round in turn and can be played without breaking', () => {
   const seen = new Set();
-  for (let n = 1; n <= 120; n++) { const L = generateLevel(n); if (L.set) seen.add(L.set); }
+  for (let n = 1; n <= 200; n++) { const L = generateLevel(n); if (L.set) seen.add(L.set); }
   assert.deepEqual([...seen].sort(), [...ORDER].sort());
   assert.equal(setFor(10), null);
   for (const name of ORDER) {
@@ -163,4 +163,87 @@ test('set pieces come round in turn and can be played without breaking', () => {
       assert.ok(cloneBoard(game.board));
     }
   }
+});
+
+test('three dimmer boxes make the chandelier hit the whole board', () => {
+  const b = plain(8, 8);
+  placeBlock(b, 3, 3, 'chandelier');
+  set(b, 0, 7, block('hatbox'));
+  const opts = { rng: makeRng(1) };
+  const s = { kind: 'spike', feeds: 'chandelier', look: 'zap', x: 0, y: 0, w: 2, h: 2 };
+  special(b, [s, s], opts);
+  assert.equal(get(b, 3, 3).charge, 1);
+  special(b, s, opts);
+  assert.ok(isEmpty(get(b, 3, 3)) && isEmpty(get(b, 4, 4)) && isEmpty(get(b, 7, 0)));
+  assert.equal(get(b, 0, 7).hp, 1);
+});
+
+test('a mask rack throws a mask per hit, a safe four cash boxes, a trophy case a trophy', () => {
+  const n = (b, kind) => b.cells.filter((c) => isBlock(c) && c.kind === kind).length;
+  const b = plain(8, 8);
+  const opts = { rng: makeRng(1) };
+  placeBlock(b, 0, 7, 'maskrack', { w: 3 });
+  for (let i = 0; i < 3; i++) special(b, hitBlockEvents(b, 0, 7, 'match', 0)[0].special, opts);
+  assert.equal(n(b, 'mask'), 3);
+  placeBlock(b, 2, 2, 'grandsafe');
+  hitBlockEvents(b, 2, 2, 'power'); hitBlockEvents(b, 2, 2, 'power');
+  special(b, hitBlockEvents(b, 2, 2, 'power')[0].special, opts);
+  assert.equal(n(b, 'cashbox'), 4);
+  const t = plain(8, 8);
+  placeBlock(t, 2, 2, 'trophycase');
+  for (let i = 0; i < 5; i++) hitBlockEvents(t, 2, 2, 'match', 0);
+  assert.equal(t.cells.filter((c) => c.t === 'drop' && c.kind === 'trophy').length, 1);
+});
+
+test('laser, thunder machine, flame pot and rocket rack hit what is needed', () => {
+  const opts = { rng: makeRng(2), needs: (c) => isBlock(c) };
+  const left = (kind, extra) => {
+    const b = plain(8, 8);
+    for (let x = 0; x < 8; x++) set(b, x, 7, block('crate'));
+    special(b, { kind, x: 0, y: 2, w: 1, h: 1, ...extra }, opts);
+    return b.cells.filter((c) => isBlock(c)).length;
+  };
+  assert.equal(left('laser', {}), 5);
+  assert.equal(left('storm', { count: 6 }), 2);
+  assert.ok(left('bursts', { count: 3 }) <= 1);
+  const b = plain(8, 8);
+  placeBlock(b, 0, 2, 'rocketrack');
+  for (let i = 0; i < 3; i++) assert.equal(hitBlockEvents(b, 0, 2, 'power')[0].special.kind, 'rocket');
+  assert.ok(isEmpty(get(b, 0, 4)));
+});
+
+test('safety curtain, flower cart, bubbles, gel and program stand', () => {
+  const b = plain(8, 8);
+  placeBlock(b, 0, 4, 'safetycurtain');
+  for (let i = 0; i < 5; i++) hitBlockEvents(b, 0, 4, 'match', 0);
+  assert.equal(b.cells.filter((c) => isBlock(c) && c.kind === 'crate').length, 12);
+  set(b, 3, 1, block('flowercart'));
+  for (let i = 0; i < 3; i++) hitBlockEvents(b, 3, 1, 'match', 0);
+  assert.equal(b.floor.filter((f) => f === 'petals').length, 8);
+  set(b, 0, 0, block('bubbles', { inside: drop('duck') }));
+  hitBlockEvents(b, 0, 0, 'match', 0);
+  assert.equal(get(b, 0, 0).kind, 'duck');
+  set(b, 1, 0, block('gel', { color: 2 }));
+  assert.equal(hitBlockEvents(b, 1, 0, 'match', 1).length, 0);
+  hitBlockEvents(b, 1, 0, 'match', 2);
+  assert.equal(hitBlockEvents(b, 1, 0, 'match', 1)[0].destroyed, true);
+  placeBlock(b, 5, 0, 'programs', { open: false });
+  assert.equal(hitBlockEvents(b, 5, 0, 'match', 1).length, 0);
+  set(b, 5, 0, { ...get(b, 5, 0), open: true });
+  assert.ok(hitBlockEvents(b, 5, 0, 'match', 1).some((e) => e.type === 'collect' && e.kind === 'program'));
+});
+
+test('a flying rig clears its column when it lands, and the finale leaves the game alone', async () => {
+  const b = plain(8, 4);
+  set(b, 2, 3, drop('flyer'));
+  const { dropAndFill } = await import('../engine/resolve.js');
+  const ev = [];
+  dropAndFill(b, { colors: 5, rng: makeRng(1), dropRule: (c) => c.rng.int(5) }, ev, true);
+  assert.ok(ev.some((e) => e.type === 'collect' && e.kind === 'flyer') && ev.some((e) => e.type === 'beam' && e.up));
+  const { finaleSteps } = await import('../engine/finale.js');
+  const game = newGame(buildSet('laser', 44, 0), 3);
+  const before = JSON.stringify(serialize(game));
+  const all = [...finaleSteps(game)];
+  assert.ok(all.length > 3 && all[0][0].type === 'transform');
+  assert.equal(JSON.stringify(serialize(game)), before);
 });

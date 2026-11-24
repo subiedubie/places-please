@@ -184,8 +184,11 @@ export function splitSteps(events, before) {
     else if (ev.type === 'roll') step.effects.push({ type: 'roller', x: ev.x, y: ev.y, h: ev.h, dir: ev.dir, p: 0, alpha: 1, slow: 7 });
     else if (ev.type === 'beam') {
       for (let i = 0; i < ev.h; i++) step.effects.push({ type: 'streak', x: ev.x, y: ev.y + i, dir: 'h', p: 0, alpha: 1, big: true, slow: 4 });
-      for (let i = 0; i < ev.w; i++) step.effects.push({ type: 'streak', x: ev.x + i, y: ev.y, dir: 'v', p: 0, alpha: 1, big: true, slow: 4 });
-    } else if (ev.type === 'act') step.act = true;
+      const cols = ev.cols || Array.from({ length: ev.w }, (_, i) => ev.x + i);
+      for (const x of cols) step.effects.push({ type: 'streak', x, y: ev.y, dir: 'v', p: 0, alpha: 1, big: true, slow: 4 });
+      if (ev.look) for (const f of step.effects) if (f.type === 'streak' && f.slow) f.look = ev.look;
+    } else if (ev.type === 'storm') step.effects.push({ type: 'bolts', x: ev.x, y: ev.y, to: ev.cells, p: 0, alpha: 1, slow: 5 });
+    else if (ev.type === 'act') step.act = true;
     else if (ev.type === 'swap') step.swapped = true;
     else if (ev.type === 'frame' && ev.board) {
       step.board = ev.board;
@@ -214,7 +217,7 @@ function takeArmed(armed, kind, test) {
 //   a combo        the same, bigger and brighter
 //   a plain match  nothing (the gems just pop)
 function effectsFor(cause, cells, armed) {
-  if (cause === 'match' || cause === 'under' || cause === 'roll' || cause === 'beam') return [];
+  if (cause === 'match' || cause === 'under' || cause === 'roll' || cause === 'beam' || cause === 'shatter' || cause === 'storm') return [];
   const xs = cells.map((c) => c.x);
   const ys = cells.map((c) => c.y);
   const mid = {
@@ -429,8 +432,8 @@ async function playBurst(step, drawFrame, T) {
         if (f.lands) hide.add(key(f.to.x, f.to.y));
         const far = Math.hypot(f.to.x - f.from.x, f.to.y - f.from.y);
         return {
-          cell: { t: 'drop', kind: f.look === 'giftbox' ? 'giftbox-2' : f.look }, bare: true, from: f.from, to: f.to, look: f.look,
-          lift: f.look === 'spike' ? 0.4 : Math.min(2.2, 0.8 + far * 0.3), x: f.from.x, y: f.from.y, scale: 1, rot: 0,
+          cell: { t: 'drop', kind: { giftbox: 'giftbox-2', cashbox: 'cashbox-1' }[f.look] || f.look }, bare: true, from: f.from, to: f.to, look: f.look,
+          lift: ['spike', 'pin'].includes(f.look) ? 0.4 : Math.min(2.2, 0.8 + far * 0.3), x: f.from.x, y: f.from.y, scale: 1, rot: 0,
         };
       }
       // If the target cell now holds a power-up, that is what was carried.

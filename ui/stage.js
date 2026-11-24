@@ -25,6 +25,9 @@ const PROP_COLORS = {
   fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5, ivy: 0x3fae49, mouse: 0xa9a9b8, paintkeg: 0x6a2ce0, dove: 0xffffff, tortoise: 0x3fae6a,
   vine: 0x2fc452, rolldrop: 0xff5f9e, fusebox: 0x6a4bff, rigbag: 0xb5541e, barrel: 0xa8622c, followspot: 0xffd75a, dressing: 0xff5a9a, giftbox: 0x2aa8ff,
   greasepot: 0xff9a24, goo: 0xff9a24, propcase: 0x3f5688, rope: 0x5a3a8a, cannon: 0x18b8a8,
+  dimmer: 0x16a4d8, chandelier: 0x8ff0ff, flamepot: 0x7a3ac0, laser: 0xff3adf, thunder: 0xffd21f, flowercart: 0xff5f9a, maskrack: 0xc01f4a, mask: 0xfff6e6,
+  grandsafe: 0x2aa070, pastepot: 0x2a8fe0, poster: 0xe0246e, trophycase: 0xa85a24, safetycurtain: 0x2f9aa8, gel: 0x8e96ad, programs: 0x3ab8d8, program: 0xfff4dc,
+  bubbles: 0xffb4dc, pin: 0xe8a04a, weight: 0x56638f, rocketrack: 0x4a34b8, trophy: 0xffc42a, duck: 0xffd21f, flyer: 0xe0246e,
 };
 
 export async function createStage(canvas, theme) {
@@ -261,8 +264,8 @@ export async function createStage(canvas, theme) {
       const span = h ? Math.max(f.x + 1, board.cols - f.x) : Math.max(f.y + 1, board.rows - f.y);
       const reach = p * span * s;
       const rot = h ? 0 : Math.PI / 2;
-      glow(overPool, beamTex(), X(f.x), Y(f.y), reach * 2, s * 1.6 * b, 0xff5a1f, a, rot);
-      glow(overPool, beamTex(), X(f.x), Y(f.y), reach * 2, s * 0.8 * b, 0xffe9b0, a, rot);
+      glow(overPool, beamTex(), X(f.x), Y(f.y), reach * 2, s * 1.6 * b, f.look === 'laser' ? 0xff20c8 : 0xff5a1f, a, rot);
+      glow(overPool, beamTex(), X(f.x), Y(f.y), reach * 2, s * 0.8 * b, f.look === 'laser' ? 0xffc8f4 : 0xffe9b0, a, rot);
       for (const d of [-1, 1]) {
         const hx = X(f.x) + (h ? d * reach : 0);
         const hy = Y(f.y) + (h ? 0 : d * reach);
@@ -286,6 +289,30 @@ export async function createStage(canvas, theme) {
       put({ t: 'block', kind: 'barrel', w: 1, h: f.h, hp: 1, charge: 0 }, X(x), Y(f.y), 1, 1);
       glow(underPool, softDot(), X(x), Y(my), s * 3, s * (f.h + 1), 0xffc24a, a * 0.6);
       if (p < 1) for (let i = 0; i < 5; i++) spark(X(x), Y(f.y) + Math.random() * s * (f.h - 1), 0xffb347, s * 4);
+    } else if (f.type === 'bolts') {
+      // Forked lightning to every cell it strikes, jumping about as it goes.
+      const reach = Math.min(1, p * 1.6);
+      for (const t of f.to || []) {
+        let px = X(f.x);
+        let py = Y(f.y);
+        const dx = X(t.x) - px;
+        const dy = Y(t.y) - py;
+        const n = 4;
+        for (let i = 1; i <= n * reach; i++) {
+          const side = i === n ? 0 : (Math.random() - 0.5) * s * 0.9;
+          const len0 = Math.hypot(dx, dy) || 1;
+          const qx = X(f.x) + (dx * i) / n - (dy / len0) * side;
+          const qy = Y(f.y) + (dy * i) / n + (dx / len0) * side;
+          const len = Math.hypot(qx - px, qy - py);
+          const rot = Math.atan2(qy - py, qx - px);
+          glow(overPool, beamTex(), (px + qx) / 2, (py + qy) / 2, len * 1.1, s * 0.5, 0x6ab4ff, a * 0.7, rot);
+          glow(overPool, beamTex(), (px + qx) / 2, (py + qy) / 2, len * 1.1, s * 0.14, 0xffffff, a * 0.9, rot);
+          px = qx;
+          py = qy;
+        }
+        if (reach === 1) glow(overPool, softDot(), X(t.x), Y(t.y), s * 1.3, s * 1.3, 0xbfe4ff, a * 0.8);
+      }
+      glow(overPool, softDot(), X(f.x), Y(f.y), s * 2.4, s * 2.4, 0xbfe4ff, a);
     } else if (f.type === 'beams') {
       (f.to || []).forEach((t, i) => {
         const dx = (t.x - f.x) * s * p;

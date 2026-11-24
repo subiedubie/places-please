@@ -188,6 +188,14 @@ export function stillNeeded(game) {
     if (cell.kind === 'dressing' && open('giftbox')) return true;
     if (cell.kind === 'greasepot' && open('goo')) return true;
     if (cell.kind === 'rigbag' && open('barrel')) return true;
+    const feeds = obstacleDef(cell.kind).feeds;
+    if (feeds && open(feeds)) return true;
+    if (cell.kind === 'maskrack' && open('mask')) return true;
+    if (cell.kind === 'grandsafe' && open('cashbox')) return true;
+    if (cell.kind === 'trophycase' && open('trophy')) return true;
+    if (cell.kind === 'safetycurtain' && open('crate')) return true;
+    if (cell.kind === 'flowercart' && open('petals')) return true;
+    if (cell.kind === 'bubbles' && cell.inside && open(cell.inside.kind)) return true;
     if (cell.kind === 'rolldrop' && open('crate')) return true;
     if (cell.kind === 'paintkeg' && open('paint_floor')) return true;
     const def = obstacleDef(cell.kind);

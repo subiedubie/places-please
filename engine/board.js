@@ -62,7 +62,7 @@ export function block(kind, extra = {}) {
   if (def.retract) cell.hp = cell.w || 1;
   if (def.roll) cell.hp = cell.h || 1;
   if (def.vine) cell.seg = new Array(cell.w || 1).fill(2); // layers left on each square, the pot first
-  if (def.charge) { cell.hp = 1; cell.charge = def.charge; } // spikes still to come
+  if (def.charge) { cell.hp = 1; cell.charge = extra.charge ?? def.charge; cell.full = cell.charge; } // spikes still to come
   if (def.generator) {
     cell.hp = 1; // never goes down: a generator cannot break
     cell.count = extra.count ?? 0; // match hits so far
@@ -301,6 +301,7 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
     set(board, end.x, end.y, EMPTY);
     ev.hpLeft = w;
     ev.freed = [end];
+    if (def.each) ev.special = specialOf(def, def.each, short, x, y);
     const lifted = liftFloor(board, end.x, end.y);
     if (lifted) out.push(lifted);
     return out;
@@ -342,6 +343,7 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
   if (def.product) out.push({ type: 'collect', x, y, kind: def.product }); // candy jar: every hit
   if (next.hp > 0) {
     set(board, x, y, next);
+    if (def.each) ev.special = specialOf(def, def.each, cell, x, y);
     return out;
   }
 
@@ -377,6 +379,22 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
     // Dovecote: a dove in all of its cells but one.
     const gap = rng ? rng.int(cells.length) : cells.length - 1;
     cells.forEach((p, i) => { if (i !== gap) set(board, p.x, p.y, drop('dove')); });
+  } else if (leaves === 'drop') {
+    // A trophy: one thing that falls, from the middle of it.
+    const p = cells[Math.floor((cells.length - 1) / 2)];
+    set(board, p.x, p.y, drop(def.what));
+  } else if (leaves === 'under') {
+    ev.rolled = cells;
+    for (const p of cells) set(board, p.x, p.y, block(cell.under || 'crate'));
+  } else if (leaves === 'petalrow') {
+    // Flower cart: petals under everything in its row.
+    const laid = [];
+    for (let px = 0; px < board.cols; px++) {
+      if (get(board, px, y) === null || floorAt(board, px, y) !== null) continue;
+      setFloor(board, px, y, 'petals');
+      laid.push({ x: px, y });
+    }
+    out.push({ type: 'spread', kind: 'petals', cells: laid });
   } else if (leaves === 'paint') {
     // Paint keg: paint flies to squares anywhere on the board.
     const dry = [];
@@ -401,8 +419,8 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
       }
     }
     out.push({ type: 'goo', x, y, cells: laid });
-  } else if (['blast', 'bigblast', 'rocket', 'beam', 'toss', 'spike'].includes(leaves)) {
-    ev.special = { kind: leaves, x, y, w: cell.w || 1, h: cell.h || 1, what: def.what, count: def.count };
+  } else if (['blast', 'bigblast', 'rocket', 'beam', 'toss', 'spike', 'laser', 'storm', 'bursts'].includes(leaves)) {
+    ev.special = specialOf(def, leaves, cell, x, y);
     if (leaves === 'blast' || leaves === 'bigblast') ev.blast = true;
   }
   if (def.linked) {
@@ -420,6 +438,11 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
   }
   return out;
 }
+
+// What an obstacle sets off, for special() in powers.js.
+const specialOf = (def, kind, cell, x, y) => ({
+  kind, x, y, w: cell.w || 1, h: cell.h || 1, what: def.what, count: def.count, feeds: def.feeds, look: def.look,
+});
 
 // A vine: every square that was hit loses a layer. One with none left is cut,
 // and everything beyond it (away from the pot) falls off. Cut at the pot, the
