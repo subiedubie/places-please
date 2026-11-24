@@ -17,7 +17,8 @@
 //   #settings-rivals  in Settings
 // The pop-up sheet is made here and added to #app.
 
-import { drawPowerIcon } from './render.js';
+import { drawPowerIcon, drawPiece } from './render.js';
+import { flyTo } from './fly.js';
 import { drawEventIcon } from './eventicons.js'; // the round picture badges
 import { theme } from '../config/theme.js';
 
@@ -585,7 +586,13 @@ export function createEvents(session, onChange) {
       const oldText = before.bubbles[btn.dataset.ev];
       if (bubble && oldText) bubble.textContent = oldText; // start from the old number
       const words = gainText(line, oldText);
-      setTimeout(() => {
+      // A gem flies from the middle of the screen into the badge, and the
+      // number changes as it lands.
+      const gem = step % 5;
+      setTimeout(async () => {
+        const pic = btn.querySelector('.ev-b-pic');
+        await flyTo((g, size) => drawPiece(g, gem, size / 2, size / 2, size, theme), 38,
+          { x: window.innerWidth / 2, y: window.innerHeight * 0.4 }, pic, 650, 0);
         if (bubble) {
           bubble.textContent = newText;
           bubble.classList.add('ev-b-bump'); // a small swell as the number changes

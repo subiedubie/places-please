@@ -4,13 +4,15 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v9';
+const CACHE = 'places-please-v10';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
 // FILES-START
 const FILES = [
   './',
+  './art/atlas.js',
+  './art/atlas.webp',
   './config/album.js',
   './config/calendar.js',
   './config/curve.js',
@@ -57,17 +59,23 @@ const FILES = [
   './meta/session.js',
   './meta/shop.js',
   './ui/anim.js',
+  './ui/art.js',
   './ui/boosters.js',
   './ui/eventicons.js',
   './ui/events.css',
   './ui/events.js',
+  './ui/fly.js',
+  './ui/fx.js',
   './ui/help.css',
   './ui/help.js',
   './ui/input.js',
   './ui/main.js',
   './ui/render.js',
   './ui/screens.js',
+  './ui/stage.js',
   './ui/style.css',
+  './vendor/pixi-LICENSE.txt',
+  './vendor/pixi.min.js',
 ];
 // FILES-END
 

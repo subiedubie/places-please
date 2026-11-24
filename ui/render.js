@@ -6,6 +6,7 @@
 
 import { get } from '../engine/board.js';
 import { OBSTACLES, OBSTACLES2, DROPPER } from '../config/obstacles.js';
+import { drawArt, hasArt } from './art.js'; // the rendered pictures
 
 const TAU = Math.PI * 2;
 const GLOW = 'rgba(255, 255, 255, 0.45)'; // lighter detail drawn on a piece
@@ -317,6 +318,7 @@ const SHAPES = {
 export function drawPiece(ctx, colorIndex, cx, cy, size, theme) {
   const info = theme.pieces[colorIndex];
   if (!info) return; // a color this theme does not know: draw nothing
+  if (drawArt(ctx, 'gem' + colorIndex, cx, cy, size * 1.02, size * 1.02)) return;
   const shape = SHAPES[info.shape] || SHAPES.rose;
   ctx.save();
   ctx.translate(cx, cy);
@@ -337,6 +339,8 @@ function drawPower(ctx, kind, cx, cy, size, theme, opts) {
   const pc = theme.powerColors;
   const ink = pc.star || '#1b2030';
   const isSuper = kind === 'prism' && (opts && opts.superPrism !== undefined ? !!opts.superPrism : superMode);
+  const art = isSuper ? 'prism-super' : opts && opts.bare && hasArt(kind + '-bare') ? kind + '-bare' : kind;
+  if (drawArt(ctx, art, cx, cy, size * 0.96, size * 0.96)) return;
   const r = size * 0.4;
   ctx.save();
   ctx.translate(cx, cy);
@@ -1245,6 +1249,7 @@ const BLOCKS2 = {
 //   Petals    strong pink, with a dark pink scalloped border
 // (x0, y0) is the cell's top-left corner; `seed` only varies the colors.
 function drawFloor(ctx, kind, x0, y0, cell, theme, seed) {
+  if (drawArt(ctx, kind, x0 + cell / 2, y0 + cell / 2, cell, cell)) return;
   const oc = theme.obstacleColors || {};
   const confetti = kind === 'confetti';
   if (!confetti && kind !== 'petals') return; // a floor kind not known here
@@ -1387,6 +1392,28 @@ const ICONS = {
   },
 };
 
+// The rendered picture of an obstacle, if there is one, with the gems it asks
+// for drawn on top. The middle of the obstacle is at (0, 0).
+function blockArt(ctx, cell, hp, w, h, size, theme, plain) {
+  const kind = cell.kind;
+  const colored = kind === 'paint' || kind === 'curtain';
+  const color = Number.isInteger(cell.color) ? cell.color : -1;
+  if (colored && color < 0 && !hasArt(kind)) return false;
+  const names = [];
+  if (kind === 'truss') names.push('truss' + w + (hp < 2 ? '-1' : ''));
+  if (kind === 'makeupcase') names.push(kind + (cell.open || plain ? '-open' : '-closed'));
+  if (colored) names.push(kind + '-' + color);
+  names.push(kind + '-' + hp, kind);
+  const name = names.find(hasArt);
+  if (!name || !drawArt(ctx, name, 0, 0, w * size, h * size)) return false;
+  const gem = (c, x, y, s) => drawPiece(ctx, c, x * size, y * size, s * size, theme);
+  if (colored && color >= 0) gem(color, 0, kind === 'paint' ? 0.08 : 0, 0.46);
+  const colors = Array.isArray(cell.colors) ? cell.colors : plain ? [0, 1, 2, 3] : [];
+  if (kind === 'footlights') colors.slice(0, 4).forEach((c, i) => gem(c, (i % 2) - 0.5, (i >> 1) - 0.5, 0.56));
+  if (kind === 'fireworks') colors.slice(0, 3).forEach((c, i) => gem(c, (i - 1) * 0.6, 0, 0.5));
+  return true;
+}
+
 // Draw one batch-2 obstacle. (cx, cy) is the middle of its anchor cell (the
 // top-left cell of a big block) and `size` is the width of one cell; a big
 // block spreads right and down from there over its w x h cells.
@@ -1408,7 +1435,7 @@ function drawBlock2(ctx, cell, cx, cy, size, theme, plain) {
   ctx.save();
   ctx.translate(cx + ((w - 1) * size) / 2, cy + ((h - 1) * size) / 2); // middle of the area
   ctx.lineJoin = 'round';
-  BLOCKS2[cell.kind](ctx, { a, b, u, lw, oc, cell, theme, plain, hp, taken });
+  if (!blockArt(ctx, cell, hp, w, h, size, theme, plain)) BLOCKS2[cell.kind](ctx, { a, b, u, lw, oc, cell, theme, plain, hp, taken });
 
   if (!plain) {
     // Top left: the lightning badge while the next hit must be a power-up.
@@ -1448,6 +1475,7 @@ function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
       // and shape still show), then two chains crossed over it, then a
       // smaller lock in the middle.
       drawContent(ctx, cell.inside, 0, 0, size, theme);
+      if (!drawArt(ctx, 'padlock', 0, 0, size, size)) {
       ctx.save();
       roundRect(ctx, -size * 0.46, -size * 0.46, size * 0.92, size * 0.92, size * 0.14);
       ctx.clip(); // the chains stop at the edge of the cell
@@ -1460,7 +1488,10 @@ function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
       ctx.translate(0, 0.14 * u);
       BLOCKS.padlock(ctx, { ...o, u: small, lw: edgeW(small) });
       ctx.translate(0, -0.14 * u);
-    } else BLOCKS.padlock(ctx, o);
+      }
+    } else if (!drawArt(ctx, 'padlock', 0, 0, size, size)) BLOCKS.padlock(ctx, o);
+  } else if (blockArt(ctx, cell, hp, 1, 1, size, theme, plain)) {
+    // drawn from its rendered picture
   } else if (BLOCKS[cell.kind]) {
     BLOCKS[cell.kind](ctx, o);
   } else {
@@ -1481,6 +1512,7 @@ function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
 // neck, hanging from a rope ring, with a big white DOWN arrow: it has to be
 // brought down to the bottom of its column.
 function drawDrop(ctx, cx, cy, size, theme) {
+  if (drawArt(ctx, DROPPER.id, cx, cy, size, size)) return;
   const oc = theme.obstacleColors || {};
   const u = size * 0.42;
   const lw = edgeW(u);
@@ -1544,6 +1576,8 @@ export function drawTargetIcon(ctx, target, size, theme) {
       ctx.lineWidth = Math.max(1, size * 0.05);
       roundRect(ctx, g, g, size - g * 2, size - g * 2, size * 0.14);
       ctx.stroke();
+    } else if (Object.hasOwn(ICONS, kind) && hasArt(kind)) {
+      drawArt(ctx, kind, mid, mid, size, size);
     } else if (Object.hasOwn(ICONS, kind)) {
       // Something a generator gives out: dove, popcorn or candy.
       ctx.save();
@@ -1565,42 +1599,29 @@ export function drawTargetIcon(ctx, target, size, theme) {
 
 const key = (x, y) => x + ',' + y;
 
-// Draw the whole board.
-// `overlay` is optional and is only used by the animations:
-//   offsets  Map of "x,y" -> { dx, dy }: draw that cell's content shifted by
-//            this many cells (used for falling and swapping)
-//   ghosts   list of { x, y, cell, scale }: extra pieces drawn on top,
-//            shrunk (used for pieces that are being cleared)
-//   flashes  list of { x, y, alpha }: a brief white flash over a cell
-//            (used when an obstacle is hit)
-//   pressed  { x, y }: the cell under the player's finger
-//   superPrism  true while the level is in Super Magic Ball mode
-//   hide     Set of "x,y": do not draw that cell's content (an animation is
-//            drawing it itself, as a sprite)
-//   sprites  list of { cell, x, y, scale, sx, rot, flash, bare }: loose
-//            pieces drawn on top at cell position (x, y), which may be a
-//            fraction; scale = size, sx = sideways squeeze (for a flip),
-//            rot = turn in radians, flash = strength of a white flash (0-1)
-//   fx       list of light effects (see drawFx below)
-// An entry in `offsets` may also carry { sx, sy }: stretch the piece by
-// these amounts, standing on the bottom of its cell (the landing bounce).
-export function drawBoard(ctx, board, layout, theme, overlay) {
+// One cell's content on its own (used by ui/stage.js to make its pictures).
+export function drawCellPicture(ctx, cell, cx, cy, size, theme, opts) {
+  if (cell.t === 'power') drawPower(ctx, cell.kind, cx, cy, size, theme, { bare: !!opts.bare, superPrism: !!opts.superPrism });
+  else drawContent(ctx, cell, cx, cy, size, theme);
+}
+
+// The tray the board sits in, its cells, and the floor layer.
+export function drawTray(ctx, board, layout, theme, shade) {
   const { originX, originY, cell } = layout;
   const ui = theme.ui;
-  const offsets = overlay && overlay.offsets;
-  const hide = overlay && overlay.hide;
-  superMode = !!(overlay && overlay.superPrism);
-
-  // Flat background over the whole canvas.
-  ctx.fillStyle = ui.background;
-  ctx.fillRect(0, 0, layout.canvasW ?? ctx.canvas.width, layout.canvasH ?? ctx.canvas.height);
-  if (!board) return;
-
   // THE TRAY: one solid tinted slab under the playable cells only, with a
   // crisp dark line all the way round it, and round every hole inside it.
   // A hole (a spot where gems never go) gets nothing at all: the plain page
   // shows there, so it reads as a gap you can see through.
   ctx.lineJoin = 'round';
+  // With shade = true only a white shape of the tray is drawn (ui/stage.js
+  // tints it dark to dim the board behind a power-up going off).
+  if (shade) {
+    traceTray(ctx, board, layout);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill('evenodd');
+    return;
+  }
   // First the same shape in the dark edge color, a few pixels lower: it
   // shows as a dark lip under the tray and along the top of every hole, so
   // the tray looks like a raised slab with the holes cut right through it.
@@ -1643,6 +1664,41 @@ export function drawBoard(ctx, board, layout, theme, overlay) {
       }
     }
   }
+}
+
+// Draw the whole board.
+// `overlay` is optional and is only used by the animations:
+//   offsets  Map of "x,y" -> { dx, dy }: draw that cell's content shifted by
+//            this many cells (used for falling and swapping)
+//   ghosts   list of { x, y, cell, scale }: extra pieces drawn on top,
+//            shrunk (used for pieces that are being cleared)
+//   flashes  list of { x, y, alpha }: a brief white flash over a cell
+//            (used when an obstacle is hit)
+//   pressed  { x, y }: the cell under the player's finger
+//   superPrism  true while the level is in Super Magic Ball mode
+//   hide     Set of "x,y": do not draw that cell's content (an animation is
+//            drawing it itself, as a sprite)
+//   sprites  list of { cell, x, y, scale, sx, rot, flash, bare }: loose
+//            pieces drawn on top at cell position (x, y), which may be a
+//            fraction; scale = size, sx = sideways squeeze (for a flip),
+//            rot = turn in radians, flash = strength of a white flash (0-1)
+//   fx       list of light effects (see drawFx below)
+// An entry in `offsets` may also carry { sx, sy }: stretch the piece by
+// these amounts, standing on the bottom of its cell (the landing bounce).
+export function drawBoard(ctx, board, layout, theme, overlay) {
+  const { originX, originY, cell } = layout;
+  const ui = theme.ui;
+  const offsets = overlay && overlay.offsets;
+  const hide = overlay && overlay.hide;
+  superMode = !!(overlay && overlay.superPrism);
+
+  // Flat background over the whole canvas.
+  ctx.fillStyle = ui.background;
+  ctx.fillRect(0, 0, layout.canvasW ?? ctx.canvas.width, layout.canvasH ?? ctx.canvas.height);
+  if (!board) return;
+
+  drawTray(ctx, board, layout, theme);
+  const gap = cellGap(cell);
 
   // A soft ring on the cell being pressed.
   if (overlay && overlay.pressed) {

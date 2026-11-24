@@ -19,6 +19,8 @@
 // No celebration effects. Event types this file does not know are skipped,
 // and a step that cannot be animated is simply shown as its picture.
 
+import { emit } from './fx.js'; // announces shards, trails and sparkles to ui/stage.js
+
 const key = (x, y) => x + ',' + y;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isPos = (p) => p && isNum(p.x) && isNum(p.y);
@@ -217,7 +219,12 @@ function effectsFor(cause, cells, armed) {
     return [{ type: 'streak', x: at.x, y: at.y, dir: h ? 'h' : 'v', p: 0, alpha: 1, big: false }];
   }
   if (cause === 'prism') {
-    const at = own('prism') || takeArmed(armed, 'prism', () => true) || mid;
+    // The ball first clears itself, then the gems of its color (twice when it
+    // is Super): the beams start from where the ball was.
+    const self = own('prism');
+    if (self) armed.ball = { x: self.x, y: self.y };
+    if (self && cells.length === 1) return [];
+    const at = armed.ball || takeArmed(armed, 'prism', () => true) || mid;
     return [{ type: 'beams', x: at.x, y: at.y, to: cells.map((c) => ({ x: c.x, y: c.y })), p: 0, alpha: 1 }];
   }
   if (cause === 'combo') {
@@ -393,7 +400,8 @@ async function playBurst(step, drawFrame, T) {
         s.x = s.from.x + (s.to.x - s.from.x) * e;
         s.y = s.from.y + (s.to.y - s.from.y) * e - Math.sin(Math.PI * e) * s.lift; // the arc
         s.rot = e * Math.PI * 4;                                                   // two full turns
-        s.scale = 1 + 0.25 * Math.sin(Math.PI * e);
+        s.scale = 1.1 + 0.45 * Math.sin(Math.PI * e);
+        emit('trail', s.x, s.y);
       }
       draw();
     });
@@ -416,11 +424,23 @@ async function playBurst(step, drawFrame, T) {
 
   // 3. The pop (and the slide-in, and the flips).
   const popMs = step.powers.length ? T.pop * 1.3 : T.pop;
+  // Everything broken throws off shards; gems the level wants fly to the top.
+  let shattered = false;
+  const shatter = () => {
+    if (shattered) return;
+    shattered = true;
+    for (const p of pops) if (!p.gone && !p.into) emit('burst', p.x0, p.y0, p.cell);
+    for (const g of ghosts) emit('burst', g.x, g.y, g.cell);
+    for (const p of pops) if (p.cell.t === 'piece') emit('collect', p.x0, p.y0, p.cell);
+    for (const g of ghosts) emit('collect', g.x, g.y, g.cell);
+  };
+  const sparkled = new Set();
   const plan = flipPlan(flips.length, T);
   const total = Math.max(popMs, flips.length ? plan.total : 0);
   await tween(total, (t) => {
     const ms = t * total;
     const tp = popMs > 0 ? clamp01(ms / popMs) : 1;
+    if (tp >= 0.22) shatter();
     for (const p of pops) {
       if (p.gone) continue;
       if (p.into) {
@@ -431,12 +451,13 @@ async function playBurst(step, drawFrame, T) {
         p.scale = e < 1 ? 1 - 0.4 * e : 0;
         p.flash = 0.6 * e;
       } else {
-        // Grow 15%, then shrink to nothing, with a brief white flash.
-        p.scale = tp < 0.3 ? 1 + 0.15 * (tp / 0.3) : 1.15 * (1 - (tp - 0.3) / 0.7);
-        p.flash = 0.85 * Math.sin(Math.PI * clamp01(tp / 0.7));
+        // Swell, flash, then burst into shards.
+        p.scale = tp < 0.22 ? 1 + 0.18 * (tp / 0.22) : 1.18 * Math.max(0, 1 - (tp - 0.22) / 0.3);
+        p.flash = 0.85 * Math.sin(Math.PI * clamp01(tp / 0.5));
       }
     }
     for (const b of born) {
+      if (tp > 0.5 && !sparkled.has(b)) { sparkled.add(b); emit('spark', b.x, b.y); }
       // Grow in during the second half, a little too big, then settle.
       const u = clamp01((tp - 0.5) / 0.5);
       b.scale = u < 0.7 ? 1.2 * (u / 0.7) : 1.2 - 0.2 * ((u - 0.7) / 0.3);
@@ -503,16 +524,30 @@ async function playFall(step, drawFrame, T) {
     return pause(ms);
   }
 
-  const LAND = 0.78; // the fall takes this share of the time; the bounce the rest
+  // Each piece has its own short clock: lower pieces go first, longer drops
+  // take longer, and every landing squashes and springs back.
   const offsets = new Map();
+  const far = Math.max(1, ...[...starts.values()].map((s) => Math.hypot(s.dx, s.dy)));
+  for (const [k, s] of starts) {
+    const [x, y] = k.split(',').map(Number);
+    s.delay = 0.16 * (1 - y / Math.max(1, board.rows - 1)) + 0.05 * (((x * 7) % 5) / 5);
+    s.drop = 0.3 + 0.2 * Math.sqrt(Math.hypot(s.dx, s.dy) / far);
+  }
   await tween(ms, (t) => {
-    const f = clamp01(t / LAND);
-    const left = 1 - f * f; // starts slow, ends fast, like falling
-    // On landing: squash down and spread out a little, then spring back.
-    const b = t > LAND ? Math.sin((Math.PI * (t - LAND)) / (1 - LAND)) : 0;
-    const sx = 1 + 0.1 * b;
-    const sy = 1 - 0.14 * b;
-    for (const [k, s] of starts) offsets.set(k, { dx: s.dx * left, dy: s.dy * left, sx, sy });
+    for (const [k, s] of starts) {
+      const f = clamp01((t - s.delay) / s.drop);
+      const left = 1 - f * f; // starts slow, ends fast, like falling
+      let sx = 1;
+      let sy = 1;
+      if (f < 1) { sx = 1 - 0.07 * f; sy = 1 + 0.1 * f; } // stretched by its speed
+      else {
+        const u = clamp01((t - s.delay - s.drop) / Math.max(0.05, 1 - s.delay - s.drop));
+        const w = Math.cos(u * Math.PI * 2.5) * (1 - u) * (1 - u); // a damped spring
+        sx = 1 + 0.17 * w;
+        sy = 1 - 0.2 * w;
+      }
+      offsets.set(k, { dx: s.dx * left, dy: s.dy * left, sx, sy });
+    }
     for (const g of ghosts) g.scale = 1 - t;
     for (const f of flashes) f.alpha = (f.peak ?? 1) * (1 - t);
     drawFrame(board, { offsets, ghosts, flashes });

@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // ---- Settings ----
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SHIPPED_FILES = ['index.html', 'manifest.webmanifest'];
-export const SHIPPED_FOLDERS = ['engine', 'levels', 'meta', 'ui', 'config', 'icons'];
+export const SHIPPED_FOLDERS = ['engine', 'levels', 'meta', 'ui', 'config', 'icons', 'art', 'vendor'];
 export const START_MARKER = '// FILES-START';
 export const END_MARKER = '// FILES-END';
 

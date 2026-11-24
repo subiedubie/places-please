@@ -8,12 +8,16 @@
 import { createSession } from '../meta/session.js';
 import { cloneBoard, get } from '../engine/board.js';
 import { theme } from '../config/theme.js';
-import { fitCanvas, layoutFor, drawBoard } from './render.js';
+import { fitCanvas, layoutFor, drawBoard, drawTargetIcon } from './render.js';
 import { attachInput } from './input.js';
 import { playEvents, playSwap, wait } from './anim.js';
 import { createScreens } from './screens.js';
 import { createEvents } from './events.js';
 import { createBoosterUi } from './boosters.js';
+import { createStage } from './stage.js'; // the PixiJS drawing of the board
+import { loadArt } from './art.js';
+import { fx } from './fx.js';
+import { flyTo } from './fly.js';
 import { initHelp, showLevelIntro } from './help.js'; // rule cards, "?" and How to play
 
 // Copy the colors from config/theme.js into the page, so that file is the
@@ -43,6 +47,7 @@ const eventUi = createEvents(session, () => { if (!ui.$('screen-home').hidden) g
 const $ = ui.$;
 const canvas = $('board');
 
+let stage = null;    // PixiJS, or null if this phone cannot (then ctx is used)
 let ctx = null;      // the drawing surface of the canvas
 let layout = null;   // where the board sits inside the canvas
 let shown = null;    // the board as currently drawn (our own copy)
@@ -68,19 +73,20 @@ const speedFactor = () => (speed() === 'fast' ? 0.5 : 1);
 
 // Paint a board. The animations call this many times a second.
 function drawFrame(board, overlay) {
-  if (!ctx || !layout || !board) return;
+  if ((!ctx && !stage) || !layout || !board) return;
   shown = board;
   // superPrism: Magic Balls are drawn in their Super form on a Super level.
   const extra = { ...(overlay || {}), superPrism: !!(session.game && session.game.superPrism) };
   if (pressed && !busy) extra.pressed = pressed;
-  drawBoard(ctx, board, layout, theme, extra);
+  if (stage) stage.draw(board, layout, extra);
+  else drawBoard(ctx, board, layout, theme, extra);
 }
 
 // Measure the canvas again (first showing, phone rotated, window resized).
 function refit() {
   if (!onLevel || !session.game) return;
-  const fit = fitCanvas(canvas);
-  ctx = fit.ctx;
+  const fit = stage ? stage.fit() : fitCanvas(canvas);
+  ctx = fit.ctx || null;
   const b = session.game.board;
   layout = layoutFor(fit.w, fit.h, b.cols, b.rows);
   drawFrame(shown || cloneBoard(b));
@@ -95,6 +101,7 @@ window.addEventListener('resize', refit);
 // up, and a "+3" on each side-game badge that gained something.
 function goHome(round) {
   onLevel = false;
+  if (stage) stage.show(false);
   const save = session.save;
   const game = session.game;
   // The tier of the next level, if anything can tell us.
@@ -143,6 +150,7 @@ function goLevel() {
   boosters.refreshBar(); // the booster bar under the board
   eventUi.level(); // the boost banner; before refit() because it takes height
   ui.show('level');
+  if (stage) stage.show(true);
   refit(); // must come after show(): a hidden canvas has no size
 }
 
@@ -158,6 +166,7 @@ function goResults(result, levelN) {
 
 function goSettings(message) {
   onLevel = false;
+  if (stage) stage.show(false);
   ui.settings(session, message);
   eventUi.settings();
   ui.show('settings');
@@ -223,6 +232,24 @@ let shownTargets = [];
 function rememberTargets() {
   shownTargets = session.game.targets.map((t) => ({ ...t }));
 }
+
+// Something the level still wants was just collected at cell (x, y): it flies
+// up to its count at the top of the screen.
+fx.collect = (x, y, cell) => {
+  if (!onLevel || !layout) return;
+  const i = shownTargets.findIndex((t) => t.have < t.need
+    && (cell.t === 'piece' ? t.color === cell.color : t.block === cell.kind));
+  const chip = i >= 0 ? $('hud-targets').children[i] : null;
+  if (!chip) return;
+  const r = canvas.getBoundingClientRect();
+  const from = {
+    x: r.left + layout.originX + (x + 0.5) * layout.cell,
+    y: r.top + layout.originY + (y + 0.5) * layout.cell,
+  };
+  const target = shownTargets[i];
+  flyTo((g, size) => drawTargetIcon(g, target, size, theme), layout.cell * 0.8, from, chip,
+    620 * speedFactor(), Math.random() * 120 * speedFactor());
+};
 
 function shake() {
   canvas.classList.remove('shake');
@@ -328,6 +355,12 @@ $('settings-recovered-btn').onclick = () => {
 
 // ---- Start ----
 
+// Wait a moment for the pictures and the PixiJS stage; if either is slow or
+// missing the game opens anyway with the simpler drawing.
+const within = (p, ms, other) => Promise.race([p, wait(ms).then(() => other)]);
+const stageReady = createStage(canvas, theme);
+await within(loadArt(), 6000, false);
+stage = await stageReady;
 goHome();
 
 // Lets the game open without a network connection once it has been loaded.
