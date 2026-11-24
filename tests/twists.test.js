@@ -124,7 +124,7 @@ test('every twist has its introduction level, and the levels are well formed', (
     const L = generateLevel(n);
     assert.deepEqual(generateLevel(n), L);
     assert.ok(L.targets.length >= 1 && L.targets.length <= 3, `level ${n}`);
-    assert.ok(L.moves <= 60);
+    assert.ok(L.moves <= 60 || L.seconds);
     for (const t of L.targets) seen[t.block] = (seen[t.block] || 0) + 1;
     const g = newGame(L, 3);
     for (const t of L.targets) {

@@ -50,6 +50,7 @@ export const RULES = {
   sandbag:   'Bring the Sandbag down to the bottom of the board to collect it.',
 
   // Floors (they lie under a piece)
+  dust:      'Clear whatever stands on Dust before the Cobwebs creep back.',
   confetti:  'Clear whatever stands on Confetti to sweep it up.',
   petals:    'Clear whatever stands on Petals to sweep them up. A broken Bouquet scatters more.',
 
@@ -81,6 +82,16 @@ export const RULES = {
   propcase:    'Make 2 matches next to a Prop Case. The belt moves after every move.',
   rope:        'Make a match next to the Backstage squares to open them up.',
   cannon:      'Make 2 matches next to a Streamer Cannon. It shoots at something you need.',
+  squib:       'Make 3 matches next to a Squib and it goes off, hitting what is beside it.',
+  cobweb:      'Make a match next to a Cobweb to sweep it away. It leaves Dust, and Cobwebs creep back over Dust unless you sweep one away every move.',
+  straw:       'Make 2 matches next to Packing Straw to clear it. There are treasures underneath.',
+  gallery:     'Make 4 matches next to a Shooting Gallery, then hit it with a power-up.',
+  painttube:   'Make a match next to a Paint Tube to burst it. It paints its own square and the four beside it.',
+  carpet:      'Make 5 matches next to a Rolled Carpet to take the whole roll away.',
+  wardrobe:    'Every match next to a Wardrobe gives one Glove. Each holds 5.',
+  lift:        'Clear as many gems of its color as the Stage Lift shows and it shoots up through its column.',
+  lamp:        'Lead the paint to a Cue Lamp to light it. A match or blast that touches paint paints every square it clears.',
+  capsule:     'Make a match next to a Parcel to open it.',
   dimmer:      'Make 4 matches next to a Dimmer Box to send its power to the Chandelier.',
   chandelier:  'Power from 3 Dimmer Boxes makes the Chandelier shatter and hit the whole board.',
   flamepot:    'Hit a Flame Pot with a power-up, then make 3 matches next to it. It throws three fireballs.',
@@ -105,7 +116,8 @@ export const RULES = {
   dove:    'Doves fall out of a broken Dovecote. Bring each one down to the bottom of the board.',
   trophy:  'Bring each Trophy down to the bottom of the board.',
   duck:    'Bring each Rubber Duck down to the bottom of the board.',
-  flyer:   'Bring the Flying Rig down to the bottom. It takes off again and clears its whole column.',
+  flyer:   'Bring the Flying Rig down to the bottom. It takes off again, clears its whole column and drops 2 Parcels.',
+  glove: 'Make a match next to a Wardrobe for each Glove.',
   program: 'Make a match next to an open Program Stand for each Program.',
   popcorn: 'Make 3 matches next to a Popcorn Cart to pop each Popcorn.',
   candy:   'Every hit on a Candy Jar gives one Candy.',
@@ -120,6 +132,7 @@ export const COLLECTIBLE_NAMES = {
   duck: 'Rubber Duck',
   flyer: 'Flying Rig',
   program: 'Program',
+  glove: 'Glove',
   popcorn: 'Popcorn',
   candy: 'Candy',
 };

@@ -299,10 +299,27 @@ async function pump() {
   if (wanted && onLevel) pump();
 }
 
+// A LEVEL AGAINST THE CLOCK (level.seconds): the time runs while the board can be seen.
+const TICK = 250;
+setInterval(async () => {
+  const game = session.game;
+  if (!onLevel || document.hidden || !game || game.secondsLeft === undefined || game.status !== 'playing') return;
+  if (document.querySelector('.overlay:not([hidden]), .help-card:not([hidden])')) return; // a card is in the way
+  if (game.targets.every((t) => t.have >= t.need)) return; // already done; the last gems are landing
+  game.secondsLeft = Math.max(0, game.secondsLeft - TICK / 1000);
+  ui.hud({ ...game, targets: shownTargets.length ? shownTargets : game.targets });
+  if (game.secondsLeft > 0) return;
+  game.movesLeft = 0; // time is up: the move being played may still win it
+  wanted = null;
+  if (busy || ending) return; // (its end settles the level)
+  game.status = 'lost';
+  await afterMove();
+}, TICK);
+
 // A move is over. Out of moves: offer more before the level is closed as a
 // loss; if the player buys them the level simply carries on.
 async function afterMove() {
-  if (session.isOver() && session.game.status === 'lost' && await boosters.outOfMoves()) {
+  if (session.isOver() && session.game.status === 'lost' && session.game.secondsLeft === undefined && await boosters.outOfMoves()) {
     ui.hud(session.game);
   } else if (session.isOver()) {
     await wait(350); // a moment to see the final board

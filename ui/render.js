@@ -11,7 +11,7 @@ import { drawArt, hasArt } from './art.js'; // the rendered pictures
 const TAU = Math.PI * 2;
 const GLOW = 'rgba(255, 255, 255, 0.45)'; // lighter detail drawn on a piece
 const MAX_CELL = 64;                      // cells never get bigger than this
-const BOARD_PAD = 6;                      // free space kept around the board
+const BOARD_PAD = 5;                      // free space kept around the board
 
 // Match the canvas's real pixel size to its size on the page.
 // Returns { ctx, w, h } with w and h in CSS pixels.
@@ -643,12 +643,36 @@ function crack(ctx, pts, sx, sy, u, pale) {
 // THE "HITS LEFT" BADGE: a dark circle with a white number. Drawn at the
 // bottom right of an obstacle whenever it needs more than one more hit.
 function hitBadge(ctx, x, y, r, n, oc) {
-  disc(ctx, x, y, r, oc.badge || '#1b2030', oc.badgeText || '#ffffff', Math.max(1, r * 0.2));
+  // A small enamel button: gold rim, violet face, a shine across the top.
+  r *= 1.08;
+  ctx.fillStyle = 'rgba(20, 8, 50, 0.35)';
+  dot(ctx, x, y + r * 0.16, r * 1.08);
+  const rim = ctx.createLinearGradient(0, y - r, 0, y + r);
+  rim.addColorStop(0, '#fff0a8');
+  rim.addColorStop(0.5, '#ffc21a');
+  rim.addColorStop(1, '#b86a00');
+  ctx.fillStyle = '#3a1a00';
+  dot(ctx, x, y, r * 1.1);
+  ctx.fillStyle = rim;
+  dot(ctx, x, y, r);
+  const face = ctx.createLinearGradient(0, y - r, 0, y + r);
+  face.addColorStop(0, '#8a4bff');
+  face.addColorStop(1, '#3a0fa0');
+  ctx.fillStyle = face;
+  dot(ctx, x, y, r * 0.78);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(x, y - r * 0.36, r * 0.52, r * 0.28, 0, 0, TAU);
+  ctx.fill();
   ctx.fillStyle = oc.badgeText || '#ffffff';
-  ctx.font = 'bold ' + (r * 1.55).toFixed(1) + 'px system-ui, -apple-system, sans-serif';
+  ctx.font = '800 ' + (r * 1.28).toFixed(1) + 'px "Lilita One", system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(n), x, y + r * 0.1);
+  ctx.strokeStyle = '#1e0658';
+  ctx.lineWidth = r * 0.28;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(String(n), x, y + r * 0.06);
+  ctx.fillText(String(n), x, y + r * 0.06);
 }
 
 // THE "POWER-UPS ONLY" BADGE: a gold circle with a dark lightning bolt.
@@ -908,6 +932,7 @@ const BIG_SIZE = {
   fireworks: [2, 1], truss: [3, 1], ticketbooth: [3, 1],
   followspot: [2, 2], dressing: [2, 2], rolldrop: [2, 2], barrel: [1, 3],
   dimmer: [2, 2], chandelier: [2, 2], laser: [1, 3], thunder: [2, 2], maskrack: [2, 1], grandsafe: [2, 2], poster: [4, 2],
+  gallery: [3, 3], wardrobe: [2, 2], carpet: [4, 1],
   trophycase: [2, 2], safetycurtain: [4, 3], programs: [2, 2], weight: [1, 5], rocketrack: [1, 3],
 };
 
@@ -1309,6 +1334,7 @@ function drawFloor(ctx, kind, x0, y0, cell, theme, seed) {
 // ---- Small pictures for the targets that are not obstacles themselves. ----
 // Each is drawn around (0, 0) with the usual unit "u".
 const ICONS = {
+  glove(ctx, u) { box(ctx, -0.5 * u, -0.7 * u, u, 1.4 * u, 0.3 * u, '#fff4fb', '#6a1a4a', 2); },
   program(ctx, u) { box(ctx, -0.5 * u, -0.7 * u, u, 1.4 * u, 0.1 * u, '#fff4dc', '#4a0424', 2); },
   // Dove: a small white bird on a pale blue disc (so the white shows).
   dove(ctx, u, oc) {
@@ -1512,6 +1538,33 @@ function drawSet(ctx, cell, cx, cy, size, theme, plain) {
       if (tile(n === 1 ? 'rack-one' : i === 0 ? 'rack-cap' : i === n - 1 ? 'rack-end' : 'rack-mid', i)) continue;
       box(ctx, left + i * s, top + s * 0.08, s, s * 0.84, s * 0.1, '#c01f4a', '#4a0418', 2);
     }
+  } else if (kind === 'carpet') {
+    // A long roll of stage carpet, with a tassel at each end.
+    const W = (plain ? 4 : w) * s;
+    const g = ctx.createLinearGradient(0, top, 0, top + s);
+    g.addColorStop(0, '#ff5a78');
+    g.addColorStop(0.35, '#e0183c');
+    g.addColorStop(1, '#7a0420');
+    roundRect(ctx, left + s * 0.06, top + s * 0.1, W - s * 0.12, s * 0.8, s * 0.36);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = '#3a0010';
+    ctx.lineWidth = Math.max(1.5, s * 0.07);
+    ctx.stroke();
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fillRect(left, top + s * 0.18, W, s * 0.09);
+    for (let x = left + s; x < left + W - s * 0.6; x += s) {
+      poly(ctx, [[0, -0.24], [0.2, 0], [0, 0.24], [-0.2, 0]].map(([a, b]) => [a + x / s, b + cy / s]), s, s, '#ffcf3f', '#8a4a00', s * 0.035);
+    }
+    for (const x of [left + s * 0.36, left + W - s * 0.48]) { ctx.fillStyle = '#ffcf3f'; ctx.fillRect(x, top, s * 0.12, s); }
+    ctx.restore();
+    if (!plain) hitBadge(ctx, left + W - s * 0.2, top + s * 0.8, s * 0.18, cell.hp, oc);
+  } else if (kind === 'lift') {
+    if (!drawArt(ctx, 'lift', cx, cy, s, s)) box(ctx, left + 2, top + 2, s - 4, s - 4, s * 0.15, '#39456e', '#0c1434', 2);
+    drawPiece(ctx, Number.isInteger(cell.color) ? cell.color : 0, cx, cy, s * 0.56, theme);
+    if (!plain && cell.left > 0) hitBadge(ctx, left + s * 0.78, top + s * 0.78, s * 0.21, cell.left, oc);
   } else if (kind === 'gel') {
     // A sheet of colored film in a metal frame; a scratched, empty frame after the first hit.
     const on = plain || cell.hp > 1;
@@ -1918,14 +1971,27 @@ export function drawTray(ctx, board, layout, theme, shade) {
   ctx.strokeStyle = ui.boardEdge || ui.text;
   ctx.lineWidth = Math.max(2, Math.min(3, cell * 0.065)); // 2 to 3 px
   ctx.stroke();
+  // A gold line just inside the edge, following every corner.
+  ctx.save();
+  traceTray(ctx, board, layout);
+  ctx.clip('evenodd');
+  traceTray(ctx, board, layout);
+  ctx.strokeStyle = '#ffcf3f';
+  ctx.lineWidth = Math.max(4, cell * 0.16);
+  ctx.stroke();
+  traceTray(ctx, board, layout);
+  ctx.strokeStyle = ui.boardEdge || ui.text;
+  ctx.lineWidth = Math.max(2, cell * 0.07);
+  ctx.stroke();
+  ctx.restore();
 
   // The lighter square inside every playable cell, so the grid reads.
   // An empty cell is just this square.
   const gap = cellGap(cell);
-  ctx.fillStyle = ui.boardCell || ui.cell;
   for (let y = 0; y < board.rows; y++) {
     for (let x = 0; x < board.cols; x++) {
       if (get(board, x, y) === null) continue;
+      ctx.fillStyle = (x + y) % 2 ? '#e6ebff' : '#f5f7ff'; // a soft checker
       roundRect(ctx, originX + x * cell + gap, originY + y * cell + gap,
         cell - gap * 2, cell - gap * 2, cell * 0.14);
       ctx.fill();

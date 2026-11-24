@@ -1,6 +1,8 @@
 # Packs the rendered pictures into one image (art/atlas.webp) and a list of
 # where each sits (art/atlas.js).   py -3.12 tools/art/pack.py <folder of PNGs>
 import glob, json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from polish import polish
 from PIL import Image
 
 CELL = 148  # pixels per board cell; enough for the sharpest iPhone
@@ -8,7 +10,7 @@ src = sys.argv[1]
 dst = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'art')
 items = []
 for f in sorted(glob.glob(os.path.join(src, '*.png'))):
-    im = Image.open(f).convert('RGBA')
+    im = polish(Image.open(f).convert('RGBA'), os.path.splitext(os.path.basename(f))[0])
     w, h = round(im.width / 256), round(im.height / 256)
     items.append((os.path.splitext(os.path.basename(f))[0], im.resize((w * CELL, h * CELL), Image.Resampling.LANCZOS), w, h))
 items.sort(key=lambda i: (-i[3], -i[2], i[0]))

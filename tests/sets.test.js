@@ -116,9 +116,10 @@ test('a belt carries everything on it one square, round the end', () => {
   const game = newGame(L, 5);
   const belt = game.board.belts[0];
   const before = [];
-  for (let x = 0; x < 8; x++) before.push(get(game.board, x, belt.y));
+  const C = game.board.cols;
+  for (let x = 0; x < C; x++) before.push(get(game.board, x, belt.y));
   takeTurn(game);
-  for (let x = 0; x < 8; x++) assert.equal(get(game.board, (x + belt.dir + 8) % 8, belt.y), before[x]);
+  for (let x = 0; x < C; x++) assert.equal(get(game.board, (x + belt.dir + C) % C, belt.y), before[x]);
 });
 
 test('the second act comes on when the first is cleared', () => {
@@ -138,7 +139,7 @@ test('the second act comes on when the first is cleared', () => {
 
 test('set pieces come round in turn and can be played without breaking', () => {
   const seen = new Set();
-  for (let n = 1; n <= 200; n++) { const L = generateLevel(n); if (L.set) seen.add(L.set); }
+  for (let n = 1; n <= 300; n++) { const L = generateLevel(n); if (L.set) seen.add(L.set); }
   assert.deepEqual([...seen].sort(), [...ORDER].sort());
   assert.equal(setFor(10), null);
   for (const name of ORDER) {
@@ -149,7 +150,7 @@ test('set pieces come round in turn and can be played without breaking', () => {
       while (game.status === 'playing' && guard++ < 80) {
         const ms = findLegalMoves(game.board);
         const p = game.board.cells.findIndex((c) => c && c.t === 'power');
-        const action = p >= 0 && (rng.int(2) || !ms.length) ? { type: 'tap', at: { x: p % 8, y: Math.floor(p / 8) } }
+        const action = p >= 0 && (rng.int(2) || !ms.length) ? { type: 'tap', at: { x: p % game.board.cols, y: Math.floor(p / game.board.cols) } }
           : { type: 'swap', ...rng.pick(ms) };
         const ev = act(game, action);
         assert.notEqual(ev[0].type, 'invalid', name);
@@ -246,4 +247,55 @@ test('a flying rig clears its column when it lands, and the finale leaves the ga
   const all = [...finaleSteps(game)];
   assert.ok(all.length > 3 && all[0][0].type === 'transform');
   assert.equal(JSON.stringify(serialize(game)), before);
+});
+
+test('every set piece is drawn square, on its own outline, 64 to 99 squares', () => {
+  const outlines = new Set();
+  for (const name of ORDER) {
+    const L = buildSet(name, 44, 0);
+    assert.ok(L.cols >= 8 && L.cols <= 9 && L.rows >= 9 && L.rows <= 11, name);
+    for (const b of L.blocks) assert.ok(b.x >= 0 && b.x < L.cols && b.y < L.rows, name);
+    for (const t of L.targets) assert.ok(t.need > 0, name);
+    // Nothing that was drawn may be left out when it is placed.
+    const g = newGame(L, 1);
+    for (const b of L.blocks) assert.ok(isBlock(get(g.board, b.x, b.y)) && get(g.board, b.x, b.y).kind === b.kind, name + ' ' + b.x + ',' + b.y);
+    outlines.add(L.cols + 'x' + L.rows + JSON.stringify(L.holes));
+  }
+  assert.ok(outlines.size >= 24, outlines.size + ' outlines');
+});
+
+test('batch 5: squib, cobweb, straw, paint tube, lift and lamp', () => {
+  let b = plain(8, 8);
+  set(b, 3, 3, block('squib'));
+  hitBlockEvents(b, 3, 3, 'match', 0); hitBlockEvents(b, 3, 3, 'match', 0);
+  special(b, hitBlockEvents(b, 3, 3, 'match', 0)[0].special, { rng: makeRng(1) });
+  assert.ok(isEmpty(get(b, 3, 2)) && isEmpty(get(b, 2, 3)) && isPiece(get(b, 2, 2)));
+  set(b, 5, 5, block('cobweb'));
+  hitBlockEvents(b, 5, 5, 'match', 0);
+  assert.equal(b.floor[5 * 8 + 5], 'dust');
+  // A cobweb left alone creeps back over dust; the count to clear stays right.
+  const L = buildSet('cobwebs', 44, 0);
+  const g = newGame(L, 1);
+  const w = L.blocks[0];
+  set(g.board, w.x, w.y, piece(0));
+  g.board.floor[w.y * L.cols + w.x] = 'dust';
+  takeTurn(g);
+  assert.equal(get(g.board, w.x, w.y).kind, 'cobweb');
+  assert.equal(g.targets[0].need, L.blocks.length);
+  // Lift: full, it clears its column.
+  const l = newGame(buildSet('lifts', 44, 0), 1);
+  const i = l.board.cells.findIndex((c) => isBlock(c) && c.kind === 'lift');
+  l.board.cells[i] = { ...l.board.cells[i], left: 0 };
+  const m = findLegalMoves(l.board)[0];
+  const ev = act(l, { type: 'swap', ...m });
+  assert.ok(ev.some((e) => e.type === 'block' && e.kind === 'lift' && e.destroyed) && ev.some((e) => e.type === 'beam'));
+  // Lamp: lit when paint is beside it.
+  const t = newGame(buildSet('trail', 44, 0), 1);
+  const k = t.board.cells.findIndex((c) => isBlock(c) && c.kind === 'lamp');
+  for (const d of [1, -1]) if (t.board.cells[k + d] && isPiece(t.board.cells[k + d]) && Math.floor((k + d) / 9) === Math.floor(k / 9)) t.board.paint[k + d] = 1;
+  act(t, { type: 'swap', ...findLegalMoves(t.board)[0] });
+  assert.ok(t.targets[0].have >= 1);
+  // Against the clock: the time left is saved.
+  const r = newGame(buildSet('rush', 44, 0), 1);
+  assert.equal(deserialize(serialize(r)).secondsLeft, 90);
 });

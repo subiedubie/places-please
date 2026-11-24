@@ -87,7 +87,7 @@ test('paint levels: the count always matches the board, also after saving, and t
   let won = 0;
   for (let n = 29; n < 260 && games < 25; n++) {
     const L = generateLevel(n);
-    if (!L.paint) continue;
+    if (!L.paint || L.set) continue;
     games++;
     let g = newGame(L, n);
     while (g.status === 'playing') {

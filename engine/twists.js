@@ -6,7 +6,7 @@
 //   board.revolves    [{ x, y, size }]: rings of cells that turn
 //   board.hidden      [{ x, y, w, h, found }]: treasure under the floor
 import { TWISTS } from '../config/twists.js';
-import { get, set, block, isPiece, isMovable, isBlock, floorAt, cloneBoard } from './board.js';
+import { get, set, block, isPiece, isMovable, isBlock, floorAt, setFloor, cloneBoard } from './board.js';
 
 const SIDES = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
@@ -26,7 +26,9 @@ export function uncover(board) {
   (board.hidden || []).forEach((h, i) => {
     if (h.found) return;
     for (let y = h.y; y < h.y + h.h; y++) {
-      for (let x = h.x; x < h.x + h.w; x++) if (floorAt(board, x, y) !== null) return;
+      for (let x = h.x; x < h.x + h.w; x++) {
+        if (h.under) { const c = get(board, x, y); if (isBlock(c) && c.kind === h.under) return; } else if (floorAt(board, x, y) !== null) return;
+      }
     }
     board.hidden = board.hidden.map((o, j) => (j === i ? { ...o, found: true } : o)); // old snapshots stay true
     out.push({ type: 'collect', x: h.x, y: h.y, kind: 'treasure' });
@@ -72,6 +74,20 @@ export function takeTurn(game) {
     }
   }
   delete game.history.ivyCut;
+
+  // Cobwebs creep back over the dust, unless one was swept away this move.
+  const webs = cellsWhere(board, (c) => isBlock(c) && c.kind === 'cobweb');
+  if (webs.length && !game.history.webCut) {
+    const next = webs.flatMap((p) => SIDES.map(([dx, dy]) => ({ x: p.x + dx, y: p.y + dy })))
+      .filter((p) => plain(get(board, p.x, p.y)) && floorAt(board, p.x, p.y) === 'dust');
+    if (next.length) {
+      const p = rng.pick(next);
+      set(board, p.x, p.y, block('cobweb'));
+      setFloor(board, p.x, p.y, null);
+      still.push({ type: 'grow', x: p.x, y: p.y });
+    }
+  }
+  delete game.history.webCut;
 
   // Prop bombs count down.
   for (const p of cellsWhere(board, (c) => isPiece(c) && c.fuse !== undefined)) {
@@ -162,6 +178,11 @@ export function syncTargets(game) {
     const m = game.targets.find((x) => x.block === kind);
     if (m && game.targets.some((x) => x.block === from)) m.need = m.have + count(kind) + count(from, each);
   }
+  const pc = game.targets.find((x) => x.block === 'capsule');
+  const fl = game.targets.find((x) => x.block === 'flyer');
+  if (pc && fl) pc.need = pc.have + count('capsule') + 2 * (fl.need - fl.have);
+  const du = game.targets.find((x) => x.block === 'dust');
+  if (du) du.need = du.have + count('cobweb') + (game.board.floor || []).filter((f) => f === 'dust').length;
   // Petals from flower carts: those lying, and a row for each cart to come.
   if (p && game.targets.some((x) => x.block === 'flowercart')) {
     const lying = (game.board.floor || []).filter((f) => f === 'petals').length;

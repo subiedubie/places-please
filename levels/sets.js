@@ -1,177 +1,159 @@
-// SET PIECES: levels built round one big obstacle, each with its own layout.
+// SET PIECES: levels built round one big obstacle, each on its own outline.
 // They come round in turn (see `ORDER`), on the level numbers ending in LAST,
 // except on a level that introduces something else.
 import { makeRng } from '../engine/rng.js';
+import { OBSTACLES, OBSTACLES2 } from '../config/obstacles.js';
 
 export const LAST = [1, 2, 4, 6, 9];
 // How much a Medium or Hard set piece's moves are cut (normal, medium, hard, -).
 export const FACTOR = [1, 0.95, 0.88, 0.88];
 export const FIRST = 4;
-export const ORDER = ['chandelier', 'rolldrop', 'laser', 'vine', 'masks', 'cannon', 'flyer', 'barrel', 'thunder', 'greasepot',
-  'poster', 'acts', 'bubbles', 'belt', 'flamepot', 'fusebox', 'trophies', 'dressing', 'gel', 'fireworks', 'weights', 'followspot',
-  'safes', 'rope', 'flowercart', 'dryice', 'safetycurtain', 'programs', 'rocketrack', 'truss'];
+export const ORDER = ['chandelier', 'rolldrop', 'squibs', 'vine', 'lifts', 'laser', 'cannon', 'flyer', 'cobwebs', 'masks', 'barrel',
+  'gallery', 'thunder', 'greasepot', 'rush', 'poster', 'acts', 'trail', 'bubbles', 'belt', 'carpets', 'flamepot', 'fusebox', 'straw',
+  'trophies', 'dressing', 'tubes', 'gel', 'fireworks', 'wardrobes', 'weights', 'followspot', 'safes', 'rope', 'flowercart', 'dryice',
+  'safetycurtain', 'programs', 'rocketrack', 'truss'];
 export const COLORS = [4, 4, 4, 4]; // gem colors, by tier
-// Moves each set gets on a normal level (harder levels get fewer, see movesFactor).
+// Moves each set gets on a normal level (harder levels get fewer, see FACTOR).
 export const MOVES = {
-  rolldrop: 19, vine: 16, cannon: 15, barrel: 20, greasepot: 18, acts: 33, belt: 15, fusebox: 21,
-  dressing: 20, fireworks: 27, followspot: 17, rope: 19, dryice: 19, truss: 21,
-  chandelier: 17, laser: 16, masks: 19, flyer: 27, thunder: 17, poster: 19, bubbles: 18, flamepot: 17, trophies: 21, gel: 25,
-  weights: 17, safes: 26, flowercart: 18, safetycurtain: 22, programs: 22, rocketrack: 19,
+  rolldrop: 29, vine: 15, cannon: 15, barrel: 25, greasepot: 17, acts: 36, belt: 15, fusebox: 26, dressing: 22, fireworks: 20,
+  followspot: 19, rope: 27, dryice: 21, truss: 21, chandelier: 20, laser: 15, masks: 25, flyer: 33, thunder: 18, poster: 17,
+  bubbles: 21, flamepot: 24, trophies: 20, gel: 29, weights: 15, safes: 29, flowercart: 17, safetycurtain: 28, programs: 18,
+  rocketrack: 23, squibs: 27, cobwebs: 28, straw: 27, gallery: 16, tubes: 17, carpets: 15, wardrobes: 12, lifts: 15, trail: 24, rush: 99,
 };
 
-const COLS = 8;
-const ROWS = 10;
-const fill = (kind, x0, x1, y0, y1, skip = () => false) => {
-  const out = [];
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (!skip(x, y)) out.push({ x, y, kind });
+// THE BOARDS, drawn as text:   .  a gem    #  no cell there    -  covered by the
+// big obstacle up and to the left    *  a gem on a painted square
+// Any other character is an obstacle; `is` says which.
+const H = { kind: 'hatbox' };
+const C = { kind: 'crate' };
+const MAPS = {
+  chandelier: { is: { D: { kind: 'dimmer' }, C: { kind: 'chandelier' }, h: H }, map: [
+    '##.....##', '.........', '.........', '.D-...D-.', '.--...--.', '...D-....', '...--....', 'hhhhhhhhh', 'hhhC-hhhh', 'hhh--hhhh', '#hhhhhhh#'] },
+  laser: { is: { L: { kind: 'laser' }, h: H }, map: [
+    '.........', '.........', '#.......#', '#.L...L.#', '..-...-..', '..-...-..', '.........', '.........', 'hhhhhhhhh', 'hhhhhhhhh'] },
+  masks: { fixed: true, is: { M: { kind: 'maskrack', w: 6 } }, map: [
+    '.........', '.........', '..#...#..', '..#...#..', '.........', 'M-----...', 'M-----...', 'M-----...', 'M-----...'] },
+  flyer: { is: { F: { drop: 'flyer' }, h: H, c: C }, map: [
+    'F.#.F.#.F', '..#...#..', '..#...#..', '.........', '.........', 'ccccccccc', 'hhhhhhhhh', '.........', '.........', '.........'] },
+  thunder: { is: { T: { kind: 'thunder' }, h: H }, map: [
+    '###...###', '##.....##', '#.......#', '.........', 'T-.....T-', '--.....--', '.........', 'hhhhhhhhh', 'hhhhhhhhh', 'hhhhhhhhh'] },
+  poster: { is: { p: { kind: 'pastepot' }, P: { kind: 'poster' }, c: C }, map: [
+    '#......#', '........', '........', '........', '........', 'pppppppp', '..P---..', '..----..', 'cccccccc', 'cccccccc', '#cccccc#'] },
+  bubbles: { is: { b: { kind: 'bubbles' } }, map: [
+    '.........', '#.......#', '..bbbbb..', '..bbbbb..', '..bbbbb..', '..bbbbb..', '..bbbbb..', '..bbbbb..', '#.......#', '.........'] },
+  flamepot: { is: { f: { kind: 'flamepot' }, h: H }, map: [
+    '.........', '.........', '.........', '..#...#..', 'f.#.f.#.f', '.........', '.........', 'hhhhhhhhh', 'hhhhhhhhh', 'hhhh#hhhh'] },
+  trophies: { is: { K: { kind: 'trophycase' } }, map: [
+    '#.......#', '.........', '.K-...K-.', '.--...--.', '.........', '##.....##', '.........', '..K-.K-..', '..--.--..', '.........'] },
+  gel: { is: { 0: { kind: 'gel', color: 0 }, 1: { kind: 'gel', color: 1 }, 2: { kind: 'gel', color: 2 }, 3: { kind: 'gel', color: 3 } }, map: [
+    '........', '........', '#......#', '........', '00000000', '........', '11111111', '#......#', '22222222', '........'] },
+  weights: { is: { W: { kind: 'weight' }, n: { kind: 'pin' } }, map: [
+    '.........', '.........', '.........', '#.......#', '#.......#', '..Wn.nW..', '..-n.n-..', '..-n.n-..', '..-n.n-..', '..-n.n-..', '.........'] },
+  safes: { is: { S: { kind: 'grandsafe' } }, map: [
+    '##.....##', '##.....##', '.........', '.S-...S-.', '.--...--.', '.........', '...S-....', '...--....', '.........', '##.....##'] },
+  flowercart: { is: { o: { kind: 'flowercart' } }, map: [
+    '.........', '#.......#', '..o......', '#.......#', '......o..', '#.......#', '..o......', '#.......#', '......o..', '.........'] },
+  safetycurtain: { is: { S: { kind: 'safetycurtain', w: 4, h: 3 } }, map: [
+    '#.......#', '.........', '.........', '.........', '.........', '.........', 'S---#S---', '----#----', '----#----'] },
+  programs: { is: { P: { kind: 'programs', open: true }, Q: { kind: 'programs', open: false } }, map: [
+    '#.......#', '.........', '.P-...Q-.', '.--...--.', '.........', '#..P-...#', '#..--...#', '.........', '.Q-...P-.', '.--...--.', '.........'] },
+  rocketrack: { is: { R: { kind: 'rocketrack' }, h: H }, map: [
+    '.........', '.........', '#.......#', 'R...R...R', '-...-...-', '-...-...-', '#.......#', '.........', 'hhhhhhhhh', 'hhhhhhhhh'] },
+  rolldrop: { is: { R: { kind: 'rolldrop', w: 4, h: 4 }, c: C }, map: [
+    '.........', '.........', '.........', '.........', '.........', 'R---#R---', '----#----', '----#----', '----#----', '.ccc#ccc.'] },
+  vine: { fixed: true, is: { V: { kind: 'vine', w: 7 } }, map: [
+    '#......#', '........', '........', '........', '#......#', 'V------.', '........', '.V------', '........', 'V------.', '........'] },
+  cannon: { is: { n: { kind: 'cannon' }, b: { kind: 'cashbox' } }, map: [
+    '.........', '.n.n.n.n.', '.........', '..n.n.n..', '#.......#', '#.......#', '.........', 'bbb...bbb', 'bbb...bbb', 'bbb...bbb'] },
+  barrel: { is: { B: { kind: 'barrel' }, g: { kind: 'rigbag' }, t: { kind: 'trunk' } }, map: [
+    '.........', '.........', '#.......#', '#.......#', '.ggg.ggg.', 'Btttttttt', '-tttttttt', '-tttttttB', 'tttttttt-', 'tttttttt-'] },
+  greasepot: { is: { p: { kind: 'greasepot' } }, map: [
+    '##.....##', '#.......#', '..p...p..', '.........', '....p....', '.........', '..p...p..', '#.......#', '##.....##'] },
+  acts: { is: { c: C }, map: [
+    '.........', '.........', '.........', '.........', '.........', '#ccccccc#', 'ccccccccc', 'ccccccccc', 'ccccccccc', '#ccccccc#'],
+  next: { is: { h: H }, map: [
+    '##.....##', '.........', '.........', '.........', '.........', '.........', '.........', 'hhhh.hhhh', 'hhhh.hhhh', 'hhhh#hhhh'] } },
+  belt: { is: { p: { kind: 'propcase' } }, map: [
+    '.........', '.........', '.........', 'ppppppppp', '#.......#', '#.......#', 'ppppppppp', '#.......#', '#.......#', 'ppppppppp'] },
+  fusebox: { is: { x: { kind: 'fusebox' } }, map: [
+    '##.....##', '.........', '.........', '.........', 'xxxxxxxx.', '.........', '.xxxxxxxx', '.........', 'xxxxxxxx.', '.........'] },
+  dressing: { is: { D: { kind: 'dressing' } }, map: [
+    '.........', '.D-...D-.', '.--...--.', '.........', '###...###', '.........', '.D-...D-.', '.--...--.', '.........'] },
+  fireworks: { is: { F: { kind: 'fireworks' }, h: H }, map: [
+    '........', '........', '........', '........', '........', 'F-....F-', 'hhhhhhhh', 'hhhhhhhh', 'hhhhhhh#', 'hhhhhh##'] },
+  followspot: { is: { S: { kind: 'followspot' }, h: H, c: C }, map: [
+    '.........', '.........', '.........', '#.......#', 'S-.......', '--hhhhhhh', '.........', 'cccccccS-', 'hhhhhhh--', '#.......#'] },
+  rope: { is: { r: { kind: 'rope' } }, map: [
+    '.........', '.........', '.........', '.........', 'rrrrrrrrr', 'rrrr#rrrr', 'rrr###rrr', 'rrrr#rrrr', 'rrrrrrrrr', '#rrrrrrr#'] },
+  dryice: { fixed: true, is: { I: { kind: 'dryice', w: 8 } }, map: [
+    '#.......#', '.........', '.........', '.........', '.........', 'I-------.', 'I-------.', 'I-------.', 'I-------.', 'I-------.'] },
+  truss: { fixed: true, is: { T: { kind: 'truss', w: 5 } }, map: [
+    '.........', '.........', '#.......#', '.........', '.........', 'T----....', 'T----....', 'T----....', 'T----....', '####.....'] },
+  // Batch 5
+  squibs: { is: { q: { kind: 'squib' } }, map: [
+    '.........', '.........', '.........', '#.......#', '.qqqqqqq.', '.qqqqqqq.', 'qqqqqqqqq', 'qqqqqqqqq', '#qqqqqqq#'] },
+  cobwebs: { is: { w: { kind: 'cobweb' } }, map: [
+    '.........', '.........', '.........', '.........', '..#...#..', '..#...#..', '.........', 'wwwwwwwww', 'wwwwwwwww'] },
+  straw: { fixed: true, is: { s: { kind: 'straw' } }, map: [
+    '#......#', '........', '........', '........', '........', 'ssssssss', '........', 'ssssssss', 'ssssssss', 'ssssssss'],
+  hidden: [{ x: 1, y: 5, w: 2, h: 1 }, { x: 5, y: 5, w: 2, h: 1 }, { x: 1, y: 7, w: 2, h: 2 }, { x: 5, y: 8, w: 2, h: 2 }] },
+  gallery: { is: { G: { kind: 'gallery' } }, map: [
+    '.........', '.........', '.G--.G--.', '.---.---.', '.---.---.', '.........', '##.....##', '##.G--.##', '...---...', '...---...', '.........'] },
+  tubes: { paint: true, is: { t: { kind: 'painttube' } }, map: [
+    't.......t', '.t.....t.', '..t...t..', '...t.t...', '....t....', '.........', '#.t...t.#', '.........', '.........'] },
+  carpets: { is: { K: { kind: 'carpet', w: 8 } }, map: [
+    '........', '........', '........', '#......#', 'K-------', '........', 'K-------', '........', 'K-------', '........'] },
+  wardrobes: { is: { W: { kind: 'wardrobe' } }, map: [
+    '##.....##', '.........', '..W-.W-..', '..--.--..', '.........', '.........', '..W-.W-..', '..--.--..', '##.....##'] },
+  lifts: { is: { h: H, 0: { kind: 'lift', color: 0, need: 18 }, 1: { kind: 'lift', color: 1, need: 18 }, 2: { kind: 'lift', color: 2, need: 18 }, 3: { kind: 'lift', color: 3, need: 18 } }, map: [
+    '.........', '.........', '..hhhhh..', '..hhhhh..', '..hhhhh..', '..hhhhh..', '..hhhhh..', '..hhhhh..', '.........', '##01230##'] },
+  trail: { paint: true, trail: true, is: { l: { kind: 'lamp' } }, map: [
+    '........l', '.........', '..#...#..', '*.#...#..', '.........', '....l....', '.........', '..#...#..', 'l.......l'] },
+  rush: { seconds: 90, is: { c: C, h: H }, map: [
+    '.........', '.........', '.........', 'ccc...ccc', 'ccc...ccc', 'hhh...hhh', 'ccccccccc', 'ccccccccc', 'hhhhhhhhh'] },
+};
+
+// Turn a drawing into a size, holes and obstacles.
+function read({ map, is }, flip) {
+  const rows = map.length;
+  const cols = map[0].length;
+  const out = { cols, rows, holes: [], blocks: [], drops: [], painted: [] };
+  map.forEach((line, y) => {
+    [...line].forEach((ch, x0) => {
+      const at = (w = 1) => ({ x: flip ? cols - x0 - w : x0, y });
+      if (ch === '#') out.holes.push(at());
+      else if (ch === '*') out.painted.push(at());
+      else if (is[ch] && is[ch].drop) out.drops.push({ ...at(), kind: is[ch].drop });
+      else if (is[ch]) {
+        const size = (OBSTACLES[is[ch].kind] || OBSTACLES2[is[ch].kind]).size || [1, 1];
+        out.blocks.push({ ...at(is[ch].w || size[0]), ...is[ch] });
+      }
+    });
+  });
   return out;
-};
+}
 const count = (blocks, kind) => blocks.filter((b) => b.kind === kind).length;
-const all = (blocks, ...kinds) => kinds.map((k) => ({ block: k, need: count(blocks, k) })).filter((t) => t.need > 0);
+const open = (L) => L.cols * L.rows - L.holes.length;
 
-// Each gives { blocks, targets, ... }. rng: so that they differ a little each time round.
-const BUILD = {
-  rolldrop(rng) {
-    const blocks = rng.int(2)
-      ? [{ x: 0, y: 6, kind: 'rolldrop', w: 4, h: 4 }, { x: 4, y: 6, kind: 'rolldrop', w: 4, h: 4 }]
-      : [{ x: 0, y: 5, kind: 'rolldrop', w: 3, h: 4 }, { x: 5, y: 5, kind: 'rolldrop', w: 3, h: 4 }, ...fill('hatbox', 3, 4, 7, 8)];
-    const crates = blocks.reduce((n, b) => n + (b.kind === 'rolldrop' ? b.w * b.h : 0), 0);
-    return { blocks, targets: [{ block: 'rolldrop', need: 2 }, { block: 'crate', need: crates }, ...all(blocks, 'hatbox')] };
-  },
-  vine(rng) {
-    const x = rng.int(2);
-    const blocks = [3, 5, 7, 9].map((y, i) => ({ x: (i + x) % 2, y, kind: 'vine', w: 7 }));
-    return { blocks, targets: all(blocks, 'vine') };
-  },
-  cannon(rng) {
-    const blocks = [];
-    for (let y = 1; y <= 5; y++) for (let x = 0; x < COLS; x++) if ((x + 2 * y + rng.int(2)) % 4 === 0) blocks.push({ x, y, kind: 'cannon' });
-    blocks.push(...fill('cashbox', 0, 2, 7, 9), ...fill('cashbox', 5, 7, 7, 9));
-    return { blocks, targets: all(blocks, 'cashbox', 'cannon') };
-  },
-  barrel() {
-    const blocks = [...fill('rigbag', 1, 6, 4, 4), { x: 0, y: 5, kind: 'barrel' }, { x: 7, y: 7, kind: 'barrel' }];
-    blocks.push(...fill('trunk', 0, 7, 5, 9, (x, y) => (x === 0 && y <= 7) || (x === 7 && y >= 7)));
-    return { blocks, targets: all(blocks, 'trunk', 'barrel') };
-  },
-  greasepot(rng) {
-    const at = rng.int(2) ? [[1, 2], [6, 2], [1, 7], [6, 7], [3, 5]] : [[2, 2], [5, 4], [1, 5], [6, 8], [3, 8]];
-    const blocks = at.map(([x, y]) => ({ x, y, kind: 'greasepot' }));
-    return { blocks, targets: [...all(blocks, 'greasepot'), { block: 'goo', need: 9 * blocks.length }] };
-  },
-  acts() {
-    const one = fill('crate', 0, 7, 6, 9);
-    const two = fill('hatbox', 0, 7, 7, 9);
-    return { blocks: one, targets: all(one, 'crate'), acts: [{ blocks: two, drops: [], floor: [], targets: all(two, 'hatbox') }] };
-  },
-  belt(rng) {
-    const r = rng.int(2);
-    const blocks = [3, 6, 9].flatMap((y) => fill('propcase', 0, 7, y, y));
-    return { blocks, targets: all(blocks, 'propcase'), belts: [3, 6, 9].map((y, i) => ({ y, x0: 0, x1: 7, dir: (i + r) % 2 ? 1 : -1 })) };
-  },
-  fusebox() {
-    const blocks = [...fill('fusebox', 0, 6, 4, 4), ...fill('fusebox', 1, 7, 6, 6), ...fill('fusebox', 0, 6, 8, 8)];
-    return { blocks, targets: all(blocks, 'fusebox') };
-  },
-  dressing() {
-    const blocks = [[0, 2], [6, 2], [0, 6], [6, 6]].map(([x, y]) => ({ x, y, kind: 'dressing' }));
-    return { blocks, targets: [...all(blocks, 'dressing'), { block: 'giftbox', need: 3 * blocks.length }] };
-  },
-  fireworks(rng) {
-    const blocks = [{ x: 0, y: 5, kind: 'fireworks' }, { x: 6, y: 5, kind: 'fireworks' }, ...fill(rng.int(2) ? 'hatbox' : 'trunk', 0, 7, 6, 9)];
-    return { blocks, targets: all(blocks, 'fireworks', 'hatbox', 'trunk') };
-  },
-  followspot() {
-    const blocks = [{ x: 0, y: 4, kind: 'followspot' }, { x: 6, y: 7, kind: 'followspot' }];
-    blocks.push(...fill('hatbox', 2, 7, 5, 5), ...fill('hatbox', 0, 5, 8, 8), ...fill('crate', 1, 5, 7, 7));
-    return { blocks, targets: all(blocks, 'followspot', 'hatbox', 'crate') };
-  },
-  rope() {
-    const blocks = fill('rope', 0, 7, 4, 9);
-    return { blocks, targets: all(blocks, 'rope') };
-  },
-  dryice() {
-    const blocks = [5, 6, 7, 8, 9].map((y) => ({ x: 0, y, kind: 'dryice', w: 7 }));
-    return { blocks, targets: all(blocks, 'dryice') };
-  },
-  chandelier(rng) {
-    const blocks = [{ x: 0, y: 4, kind: 'dimmer' }, { x: 6, y: 4, kind: 'dimmer' }, { x: 3, y: rng.int(2) ? 7 : 8, kind: 'chandelier' }, { x: 3, y: 3, kind: 'dimmer' }];
-    const c = blocks[2];
-    blocks.push(...fill('hatbox', 0, 7, 7, 9, (x, y) => x >= c.x && x <= c.x + 1 && y >= c.y && y <= c.y + 1));
-    return { blocks, targets: all(blocks, 'dimmer', 'chandelier', 'hatbox') };
-  },
-  laser(rng) {
-    const blocks = [{ x: 1 + rng.int(2), y: 4, kind: 'laser' }, { x: 5 + rng.int(2), y: 4, kind: 'laser' }, ...fill('hatbox', 0, 7, 8, 9)];
-    return { blocks, targets: all(blocks, 'laser', 'hatbox') };
-  },
-  masks() {
-    const blocks = [6, 7, 8, 9].map((y) => ({ x: 0, y, kind: 'maskrack', w: 5 }));
-    return { blocks, targets: [...all(blocks, 'maskrack'), { block: 'mask', need: 20 }] };
-  },
-  flyer(rng) {
-    const xs = rng.int(2) ? [1, 4, 6] : [1, 3, 6];
-    const blocks = fill('hatbox', 0, 7, 6, 7);
-    return { blocks, drops: xs.map((x) => ({ x, y: 0, kind: 'flyer' })), targets: [{ block: 'flyer', need: xs.length }, ...all(blocks, 'hatbox')] };
-  },
-  thunder() {
-    const blocks = [{ x: 0, y: 4, kind: 'thunder' }, { x: 6, y: 4, kind: 'thunder' }, ...fill('hatbox', 0, 7, 7, 9)];
-    return { blocks, targets: all(blocks, 'thunder', 'hatbox') };
-  },
-  poster() {
-    const blocks = [{ x: 2, y: 6, kind: 'poster' }, ...fill('pastepot', 0, 7, 5, 5), ...fill('crate', 0, 7, 8, 9)];
-    return { blocks, targets: all(blocks, 'pastepot', 'poster', 'crate') };
-  },
-  bubbles(rng) {
-    const x0 = 2;
-    const blocks = fill('bubbles', x0, x0 + 3, 3, 9);
-    const spots = blocks.map((_, i) => i).filter((i) => blocks[i].y > 3);
-    for (let i = 0; i < 5; i++) blocks[spots.splice(rng.int(spots.length), 1)[0]].inside = { t: 'drop', kind: 'duck' };
-    return { blocks, targets: [{ block: 'duck', need: 5 }] };
-  },
-  flamepot() {
-    const blocks = [...[[1, 4], [6, 4], [3, 5], [4, 5]].map(([x, y]) => ({ x, y, kind: 'flamepot' })), ...fill('hatbox', 0, 7, 7, 9)];
-    return { blocks, targets: all(blocks, 'flamepot', 'hatbox') };
-  },
-  trophies(rng) {
-    const r = rng.int(2);
-    const blocks = [[0 + r, 2], [5 + r, 2], [2, 5 + r], [4, 5 + r]].map(([x, y]) => ({ x, y, kind: 'trophycase' }));
-    return { blocks, targets: [{ block: 'trophy', need: blocks.length }] };
-  },
-  gel(rng) {
-    const r = rng.int(4);
-    const blocks = [4, 6, 8].flatMap((y, i) => fill('gel', 0, 7, y, y).map((b) => ({ ...b, color: (r + i) % 4 })));
-    return { blocks, targets: all(blocks, 'gel') };
-  },
-  weights() {
-    const blocks = [{ x: 1, y: 5, kind: 'weight' }, { x: 6, y: 5, kind: 'weight' }, ...fill('pin', 2, 2, 5, 9), ...fill('pin', 5, 5, 5, 9)];
-    return { blocks, targets: all(blocks, 'pin', 'weight') };
-  },
-  safes() {
-    const blocks = [{ x: 1, y: 4, kind: 'grandsafe' }, { x: 5, y: 4, kind: 'grandsafe' }, { x: 3, y: 7, kind: 'grandsafe' }];
-    return { blocks, targets: [...all(blocks, 'grandsafe'), { block: 'cashbox', need: 12 }] };
-  },
-  flowercart(rng) {
-    const r = rng.int(2);
-    const blocks = [[r, 3], [7 - r, 5], [2 + r, 7], [5 - r, 9]].map(([x, y]) => ({ x, y, kind: 'flowercart' }));
-    return { blocks, targets: [...all(blocks, 'flowercart'), { block: 'petals', need: 32 }] };
-  },
-  safetycurtain() {
-    const blocks = [{ x: 0, y: 5, kind: 'safetycurtain' }, { x: 4, y: 5, kind: 'safetycurtain' }];
-    return { blocks, targets: [...all(blocks, 'safetycurtain'), { block: 'crate', need: 24 }] };
-  },
-  programs() {
-    const blocks = [[0, 3], [6, 3], [0, 7], [6, 7], [3, 5]].map(([x, y], i) => ({ x, y, kind: 'programs', open: i % 2 === 0 }));
-    return { blocks, targets: [{ block: 'program', need: 20 }] };
-  },
-  rocketrack() {
-    const blocks = [{ x: 0, y: 4, kind: 'rocketrack' }, { x: 7, y: 4, kind: 'rocketrack' }, { x: 3, y: 5, kind: 'rocketrack' }, ...fill('hatbox', 0, 7, 8, 9)];
-    return { blocks, targets: all(blocks, 'rocketrack', 'hatbox') };
-  },
-  truss() {
-    const blocks = [5, 6, 7, 8].map((y) => ({ x: 0, y, kind: 'truss', w: 5 }));
-    return { blocks, targets: all(blocks, 'truss') };
-  },
+// What each asks for, where it is not simply "break them all".
+const ASKS = {
+  rolldrop: (L, t) => t.map((x) => (x.block === 'crate' ? { ...x, need: x.need + 32 } : x)),
+  masks: (L, t) => [...t, { block: 'mask', need: 24 }],
+  flyer: (L) => [{ block: 'flyer', need: L.drops.length }, { block: 'capsule', need: 2 * L.drops.length }],
+  greasepot: (L, t) => [...t, { block: 'goo', need: 9 * L.blocks.length }],
+  dressing: (L, t) => [...t, { block: 'giftbox', need: 3 * L.blocks.length }],
+  bubbles: () => [{ block: 'duck', need: 6 }],
+  trophies: (L) => [{ block: 'trophy', need: L.blocks.length }],
+  safes: (L, t) => [...t, { block: 'cashbox', need: 4 * L.blocks.length }],
+  flowercart: (L, t) => [...t, { block: 'petals', need: 9 * L.blocks.length }],
+  safetycurtain: (L, t) => [...t, { block: 'crate', need: 24 }],
+  programs: (L) => [{ block: 'program', need: 4 * L.blocks.length }],
+  wardrobes: (L) => [{ block: 'glove', need: 5 * L.blocks.length }],
+  cobwebs: (L) => [{ block: 'dust', need: L.blocks.length }],
+  straw: (L) => [{ block: 'treasure', need: L.hidden.length }],
+  tubes: (L) => [{ block: 'paint_floor', need: open(L) }],
 };
+const breakAll = (blocks) => [...new Set(blocks.map((b) => b.kind))].map((k) => ({ block: k, need: count(blocks, k) }));
 
 // Which set piece level n is (null: none). `taken(n)`: does something else
 // need that level?
@@ -184,9 +166,26 @@ export function setFor(n, taken = () => false) {
 const isSetNumber = (n, taken) => n >= FIRST && LAST.includes(n % 10) && !taken(n);
 
 export function buildSet(name, n, tier) {
-  const made = BUILD[name](makeRng(n).fork('set'));
-  return {
-    n, tier, set: name, cols: COLS, rows: ROWS, holes: [], colors: COLORS[tier], moves: MOVES[name],
-    drops: [], floor: [], bonus: false, ...made, targets: made.targets.slice(0, 3),
+  const rng = makeRng(n).fork('set');
+  const m = MAPS[name];
+  const flip = !m.fixed && rng.int(2) === 1; // half the time it is the other way round
+  const L = {
+    n, tier, set: name, ...read(m, flip), colors: COLORS[tier], moves: MOVES[name], floor: [], bonus: false,
   };
+  if (m.hidden) L.hidden = m.hidden.map((h) => ({ ...h, under: 'straw' }));
+  if (m.paint) L.paint = true;
+  if (m.seconds) { L.seconds = m.seconds; L.moves = 99; }
+  if (name === 'bubbles') {
+    const spots = L.blocks.filter((b) => b.y > 2);
+    for (let i = 0; i < 6; i++) spots.splice(rng.int(spots.length), 1)[0].inside = { t: 'drop', kind: 'duck' };
+  }
+  if (name === 'belt') L.belts = [...new Set(L.blocks.map((b) => b.y))].map((y, i) => ({ y, x0: 0, x1: L.cols - 1, dir: i % 2 ? 1 : -1 }));
+  if (name === 'gel') { const r = rng.int(4); for (const b of L.blocks) b.color = (b.color + r) % 4; }
+  if (m.next) {
+    const b = read(m.next, flip);
+    L.acts = [{ holes: b.holes, blocks: b.blocks, drops: [], floor: [], targets: breakAll(b.blocks) }];
+  }
+  const t = breakAll(L.blocks);
+  L.targets = (ASKS[name] ? ASKS[name](L, t) : t).slice(0, 3);
+  return L;
 }

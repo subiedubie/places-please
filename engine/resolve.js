@@ -210,7 +210,7 @@ export function dropAndFill(board, ctx, events, always) {
     events.push(...collected);
     // A flying rig takes off again as soon as it is down.
     const up = collected.filter((c) => c.kind === 'flyer');
-    if (up.length) events.push(...special(board, up.map((c) => ({ kind: 'launch', x: c.x, y: c.y, w: 1, h: 1 })), { rng: ctx.rng, needs: ctx.needs }));
+    if (up.length) events.push(...special(board, up.map((c) => ({ kind: 'launch', x: c.x, y: c.y, w: 1, h: 1, what: 'capsule', count: 2 })), { rng: ctx.rng, needs: ctx.needs }));
     events.push({ type: 'frame', board: cloneBoard(board) });
   }
 }

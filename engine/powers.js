@@ -412,10 +412,13 @@ function runSpecial(run, item) {
       run.events.push({ type: 'storm', x: x + (w - 1) / 2, y: y + (h - 1) / 2, cells: allCells(board).filter((p) => isBlock(get(board, p.x, p.y))) });
       clearArea(run, allCells(board), 'shatter');
     }
+  } else if (kind === 'pop') {
+    clearArea(run, plusCells(x, y), 'burst');
   } else if (kind === 'launch') {
     // A flying rig has come down and takes off again: its whole column.
     run.events.push({ type: 'beam', x, y, w: 1, h: 0, up: true });
     clearArea(run, colCells(board, x), 'beam');
+    if (item.what) runSpecial(run, { ...item, kind: 'toss' });
   } else if (kind === 'laser') {
     // Its middle row, and the three columns where it helps most.
     const my = y + Math.floor(h / 2);

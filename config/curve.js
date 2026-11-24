@@ -45,14 +45,14 @@ export const CURVE = {
   boards: [
     // Plain rectangles: only at the very start of each board size, and
     // the large one stays in the mix as one shape among many.
-    { name: 'full 7x8', fromLevel: 1, toLevel: 4, layout: full(7, 8) },
-    { name: 'full 8x9', fromLevel: 11, toLevel: 13, layout: full(8, 9) },
+    { name: 'full 7x8', fromLevel: 1, toLevel: 2, layout: full(7, 8) },
+    { name: 'full 8x9', fromLevel: 3, toLevel: 13, layout: full(8, 9) },
     { name: 'full 9x10', fromLevel: 21, toLevel: null, layout: full(9, 10) },
     // Shaped boards. To add one, copy an entry and redraw it.
     {
       name: '7: cut corners',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '#.....#',
         '.......',
@@ -66,8 +66,8 @@ export const CURVE = {
     },
     {
       name: '7: top notch',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '...#...',
         '...#...',
@@ -81,8 +81,8 @@ export const CURVE = {
     },
     {
       name: '7: side bites',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '.......',
         '.......',
@@ -96,8 +96,8 @@ export const CURVE = {
     },
     {
       name: '7: waist',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '.......',
         '.......',
@@ -111,8 +111,8 @@ export const CURVE = {
     },
     {
       name: '7: two towers',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '..###..',
         '..###..',
@@ -126,8 +126,8 @@ export const CURVE = {
     },
     {
       name: '7: centre gap',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '.......',
         '.......',
@@ -141,8 +141,8 @@ export const CURVE = {
     },
     {
       name: '7: diamond',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '##...##',
         '#.....#',
@@ -156,8 +156,8 @@ export const CURVE = {
     },
     {
       name: '7: stairs',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '....###',
         '.....##',
@@ -171,8 +171,8 @@ export const CURVE = {
     },
     {
       name: '7: split floor',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '.......',
         '.......',
@@ -186,8 +186,8 @@ export const CURVE = {
     },
     {
       name: '7: twin pillars',
-      fromLevel: 3,
-      toLevel: 24,
+      fromLevel: 1,
+      toLevel: 0,
       layout: [
         '.......',
         '.......',
@@ -200,8 +200,218 @@ export const CURVE = {
       ],
     },
     {
+      name: '9: shoulders',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '##.....##',
+        '#.......#',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '#.......#',
+        '##.....##',
+      ],
+    },
+    {
+      name: '9: three towers',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '..#...#..',
+        '..#...#..',
+        '..#...#..',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+      ],
+    },
+    {
+      name: '9: side tabs',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '#.......#',
+        '.........',
+        '#.......#',
+        '.........',
+        '#.......#',
+        '.........',
+        '#.......#',
+        '.........',
+        '#.......#',
+        '.........',
+        '#.......#',
+      ],
+    },
+    {
+      name: '9: twin legs',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '....#....',
+        '...###...',
+        '...###...',
+        '...###...',
+      ],
+    },
+    {
+      name: '9: wide steps',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '......###',
+        '......###',
+        '.......##',
+        '.......##',
+        '.........',
+        '.........',
+        '##.......',
+        '##.......',
+        '###......',
+        '###......',
+      ],
+    },
+    {
+      name: '9: hourglass',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '#.......#',
+        '##.....##',
+        '##.....##',
+        '#.......#',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+      ],
+    },
+    {
+      name: '9: keyhole',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '##.....##',
+        '.........',
+        '.........',
+        '....#....',
+        '...###...',
+        '....#....',
+        '.........',
+        '.........',
+        '##.....##',
+        '##.....##',
+        '##.....##',
+      ],
+    },
+    {
+      name: '9: windows',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '..#...#..',
+        '..#...#..',
+        '.........',
+        '.........',
+        '..#...#..',
+        '..#...#..',
+        '.........',
+        '.........',
+        '.........',
+      ],
+    },
+    {
+      name: '9: bridge',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '###...###',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+      ],
+    },
+    {
+      name: '9: cup',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '#.......#',
+        '#.......#',
+        '##.....##',
+        '##.....##',
+        '#.......#',
+        '.........',
+      ],
+    },
+    {
+      name: '9: ticket',
+      fromLevel: 18,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '#.......#',
+        '##.....##',
+        '#.......#',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+      ],
+    },
+    {
+      name: '9: comb',
+      fromLevel: 12,
+      toLevel: null,
+      layout: [
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.........',
+        '.#.#.#.#.',
+        '.#.#.#.#.',
+      ],
+    },
+    {
       name: '8: cut corners',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '##....##',
@@ -217,7 +427,7 @@ export const CURVE = {
     },
     {
       name: '8: centre block',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '........',
@@ -233,7 +443,7 @@ export const CURVE = {
     },
     {
       name: '8: top notch',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '...##...',
@@ -249,7 +459,7 @@ export const CURVE = {
     },
     {
       name: '8: side bites',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '........',
@@ -265,7 +475,7 @@ export const CURVE = {
     },
     {
       name: '8: letter H',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '..####..',
@@ -281,7 +491,7 @@ export const CURVE = {
     },
     {
       name: '8: four posts',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '........',
@@ -297,7 +507,7 @@ export const CURVE = {
     },
     {
       name: '8: arrowhead',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '###..###',
@@ -313,7 +523,7 @@ export const CURVE = {
     },
     {
       name: '8: zigzag',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '........',
@@ -329,7 +539,7 @@ export const CURVE = {
     },
     {
       name: '8: castle wall',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '#.#..#.#',
@@ -345,7 +555,7 @@ export const CURVE = {
     },
     {
       name: '8: funnel',
-      fromLevel: 11,
+      fromLevel: 3,
       toLevel: null,
       layout: [
         '........',

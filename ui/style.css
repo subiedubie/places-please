@@ -209,7 +209,7 @@ html, body {
 .target.done span { color: #0b8a48; } /* the green check mark */
 
 /* The board takes all the room left between the top and bottom bars. */
-.board-box { flex: 1; min-height: 0; position: relative; }
+.board-box { flex: 1; min-height: 0; position: relative; margin: 0 -14px; } /* out to the edges of the screen */
 #board {
   position: absolute;
   inset: 0;

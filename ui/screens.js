@@ -172,7 +172,13 @@ export function createScreens(theme) {
     $('screen-level').dataset.tier = game.level.tier ? String(game.level.tier) : '';
     $('hud-tier').textContent = game.level.bonus && theme.bonusName ? theme.bonusName : tierName(game.level.tier);
     $('hud-level').textContent = 'Level ' + num(game.level.n);
-    $('hud-moves').textContent = String(game.movesLeft);
+    // (a level against the clock shows the time left)
+    const clock = game.secondsLeft !== undefined;
+    const secs = Math.max(0, Math.ceil(game.secondsLeft || 0));
+    $('hud-moves').textContent = clock ? Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0') : String(game.movesLeft);
+    const label = $('hud-moves').parentElement.querySelector('.label');
+    if (label) label.textContent = clock ? 'Time' : 'Moves';
+    $('hud-moves').classList.toggle('hurry', clock && secs <= 10);
 
     // Build the target chips once per level; after that only the numbers change.
     // (A target is either a piece color or an obstacle kind.)

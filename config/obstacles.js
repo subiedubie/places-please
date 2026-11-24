@@ -40,6 +40,7 @@ export const DROPPERS = { sandbag: 'Sandbag', dove: 'Dove', tortoise: 'Tortoise'
 // stands on that cell is cleared.
 export const FLOORS = {
   confetti: { name: 'Confetti' }, // like Grass
+  dust:     { name: 'Dust' },
   petals:   { name: 'Petals' },   // like Leaves; spread by a bouquet
 };
 
@@ -72,6 +73,11 @@ export const FLOORS = {
 //              default), 'shatter' (hits the whole board), 'bigblast', 'drop'
 //              (it just falls away)
 //   each       what EVERY hit sets off (the last one by `leaves`)
+// Batch 5 (24 Nov. 2026):
+//   lift       takes no hits; when `need` gems of its color are cleared it shoots up its column
+//   lamp       takes no hits; lights when paint reaches a square beside it
+//   leaves     also: 'pop' (a 3x3 blast), 'dust' (dusty floor, over which cobwebs
+//              creep back), 'splat' (paint on it and the four squares beside it)
 //   leaves     also: 'laser' (its middle row and three columns), 'storm' (hits
 //              `count` things anywhere), 'bursts' (`count` small blasts where
 //              they help most), 'under' (shows the crates behind it), 'drop'
@@ -127,6 +133,17 @@ export const OBSTACLES2 = {
   pin:         { name: 'Belaying Pin',   size: [1, 1], hits: ['any', 'any'], leaves: 'spike', feeds: 'weight', look: 'pin', set: true },
   weight:      { name: 'Counterweight',  size: [1, 5], hits: [], charge: 5, release: 'drop', set: true },
   rocketrack:  { name: 'Rocket Rack',    size: [1, 3], hits: ['power', 'power', 'power'], each: 'rocket', leaves: 'rocket', set: true },
+  // Batch 5
+  squib:       { name: 'Squib',          size: [1, 1], hits: ['any', 'any', 'any'], leaves: 'pop', set: true },
+  cobweb:      { name: 'Cobweb',         size: [1, 1], hits: ['any'], leaves: 'dust', set: true },
+  straw:       { name: 'Packing Straw',  size: [1, 1], hits: ['any', 'any'], set: true },
+  gallery:     { name: 'Shooting Gallery', size: [3, 3], hits: ['any', 'any', 'any', 'any', 'power'], set: true },
+  painttube:   { name: 'Paint Tube',     size: [1, 1], hits: ['any'], leaves: 'splat', set: true },
+  carpet:      { name: 'Rolled Carpet',  size: [8, 1], hits: ['any', 'any', 'any', 'any', 'any'], set: true },
+  wardrobe:    { name: 'Wardrobe',       size: [2, 2], hits: ['any', 'any', 'any', 'any', 'any'], product: 'glove', set: true },
+  lift:        { name: 'Stage Lift',     size: [1, 1], hits: [], lift: true, set: true },
+  lamp:        { name: 'Cue Lamp',       size: [1, 1], hits: [], lamp: true, set: true },
+  capsule:     { name: 'Parcel',         size: [1, 1], hits: ['any'], set: true },
   curtain:     { name: 'Curtain',        size: [1, 1], hits: [], curtain: true },                 // like the Curtain
 };
 

@@ -279,3 +279,6 @@ html, body { position: fixed; inset: 0; width: 100%; }
 .act-curtain b { position: relative; font: 44px Limelight, Georgia, serif; color: #ffe9a8; text-shadow: 0 3px 0 #4a0418; animation: act-name 1.4s both; }
 @keyframes act-close { 0%, 100% { transform: translateX(var(--away)); } 38%, 62% { transform: none; } }
 @keyframes act-name { 0%, 30%, 72%, 100% { opacity: 0; } 42%, 60% { opacity: 1; } }
+
+/* Against the clock: the last ten seconds. */
+#hud-moves.hurry { color: #d6103a; }

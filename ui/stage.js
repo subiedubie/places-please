@@ -27,7 +27,7 @@ const PROP_COLORS = {
   greasepot: 0xff9a24, goo: 0xff9a24, propcase: 0x3f5688, rope: 0x5a3a8a, cannon: 0x18b8a8,
   dimmer: 0x16a4d8, chandelier: 0x8ff0ff, flamepot: 0x7a3ac0, laser: 0xff3adf, thunder: 0xffd21f, flowercart: 0xff5f9a, maskrack: 0xc01f4a, mask: 0xfff6e6,
   grandsafe: 0x2aa070, pastepot: 0x2a8fe0, poster: 0xe0246e, trophycase: 0xa85a24, safetycurtain: 0x2f9aa8, gel: 0x8e96ad, programs: 0x3ab8d8, program: 0xfff4dc,
-  bubbles: 0xffb4dc, pin: 0xe8a04a, weight: 0x56638f, rocketrack: 0x4a34b8, trophy: 0xffc42a, duck: 0xffd21f, flyer: 0xe0246e,
+  bubbles: 0xffb4dc, pin: 0xe8a04a, weight: 0x56638f, rocketrack: 0x4a34b8, squib: 0xff3f5a, cobweb: 0xeef2ff, straw: 0xf2b632, gallery: 0xf0183c, painttube: 0xb02af0, carpet: 0xe0183c, wardrobe: 0x9a4bff, glove: 0xfff4fb, lift: 0x39456e, lamp: 0xfff2a0, capsule: 0xe8a04a, trophy: 0xffc42a, duck: 0xffd21f, flyer: 0xe0246e,
 };
 
 export async function createStage(canvas, theme) {

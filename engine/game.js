@@ -15,7 +15,7 @@ import { findGroups } from './matches.js';
 import { DROP_RULES } from './drops.js';
 import { settleSteps } from './resolve.js';
 import { placeTwists, takeTurn, uncover, syncTargets } from './twists.js';
-import { fire, combine } from './powers.js';
+import { fire, combine, special } from './powers.js';
 import { hasLegalMove, reshuffle } from './moves.js';
 
 const INVALID = () => [{ type: 'invalid' }];
@@ -105,7 +105,10 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
 
   placeTwists(board, level);
   if (level.belts) board.belts = level.belts.map((b) => ({ ...b }));
-  if (level.paint) board.paint = new Array(board.cells.length).fill(0);
+  if (level.paint) {
+    board.paint = new Array(board.cells.length).fill(0);
+    for (const p of level.painted || []) board.paint[p.y * board.cols + p.x] = 1;
+  }
 
   // Each gift replaces one ordinary piece, chosen at random. Replacing a piece
   // with a power-up cannot create a match, so the board stays clean.
@@ -145,6 +148,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
     moveCount: 0,
     act: 0,                     // which board of a level with several (level.acts)
     history: {},                // room for later drop rules (retries, streaks, purchases)
+    ...(level.seconds ? { secondsLeft: level.seconds } : {}), // a level against the clock
     superPrism: !!options.superPrism, // Magic Balls have double effect this level
   };
   // Not saved as-is (functions and generator state); see serialize().
@@ -194,6 +198,9 @@ export function stillNeeded(game) {
     if (cell.kind === 'grandsafe' && open('cashbox')) return true;
     if (cell.kind === 'trophycase' && open('trophy')) return true;
     if (cell.kind === 'safetycurtain' && open('crate')) return true;
+    if ((cell.kind === 'cobweb') && open('dust')) return true;
+    if (cell.kind === 'straw' && open('treasure')) return true;
+    if (cell.kind === 'painttube' && open('paint_floor')) return true;
     if (cell.kind === 'flowercart' && open('petals')) return true;
     if (cell.kind === 'bubbles' && cell.inside && open(cell.inside.kind)) return true;
     if (cell.kind === 'rolldrop' && open('crate')) return true;
@@ -215,6 +222,10 @@ export function stillNeeded(game) {
         if (isDrop(c) && drops.includes(c.kind)) return true;
       }
     }
+    // The next squares the light must cross to reach a lamp.
+    if (placed && open('lamp') && isPiece(cell) && !isPainted(board, x, y)
+      && [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => isPainted(board, x + dx, y + dy))) return true;
+    if (placed && open('lift') && isPiece(cell) && board.cells.some((c) => isBlock(c) && c.kind === 'lift' && c.color === cell.color)) return true;
     if (placed && open('paint_floor') && !isPainted(board, x, y)) return true;
     if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
     if (isPiece(cell)) {
@@ -255,6 +266,7 @@ export function recordEvents(game, events) {
       for (const c of e.cells) {
         if (isPiece(c.was)) {
           game.tally.cleared[c.was.color]++;
+          countLifts(game, c.was.color);
           const t = game.targets.find((t) => t.color === c.was.color);
           if (t) t.have = Math.min(t.need, t.have + 1);
           if (c.was.fuse !== undefined) countBlock(game, 'propbomb');
@@ -264,6 +276,7 @@ export function recordEvents(game, events) {
     } else if (e.type === 'block') {
       // An obstacle took a hit; it only counts once it is destroyed.
       if (e.destroyed) countBlock(game, e.kind);
+      if (e.destroyed && e.kind === 'cobweb') game.history.webCut = true;
       if (e.destroyed && e.kind === 'ivy') game.history.ivyCut = true; // it does not grow this move
     } else if (e.type === 'collect') {
       // A dropper reached the bottom ('sandbag'), or a generator or candy jar
@@ -280,6 +293,34 @@ export function recordEvents(game, events) {
       game.tally.cascades++;
     }
   }
+}
+
+// A gem of this color was cleared: the first lift waiting for it counts it.
+function countLifts(game, color) {
+  const cells = game.board.cells;
+  const i = cells.findIndex((c) => isBlock(c) && c.kind === 'lift' && c.color === color && c.left > 0);
+  if (i >= 0) cells[i] = { ...cells[i], left: cells[i].left - 1 };
+}
+
+// Stage lifts that are full shoot up their columns, and lamps beside the light
+// come on. Returns the events.
+function liftsAndLamps(game) {
+  const { board } = game;
+  const events = [];
+  const go = [];
+  board.cells.forEach((cell, i) => {
+    if (!isBlock(cell)) return;
+    const x = i % board.cols;
+    const y = Math.floor(i / board.cols);
+    const lit = cell.kind === 'lamp' && board.paint && [[0, -1], [1, 0], [0, 1], [-1, 0], [0, 0]].some(([dx, dy]) => isPainted(board, x + dx, y + dy));
+    const up = cell.kind === 'lift' && cell.left === 0;
+    if (!lit && !up) return;
+    set(board, x, y, EMPTY);
+    events.push({ type: 'block', x, y, kind: cell.kind, hpLeft: 0, destroyed: true, by: 'count' });
+    if (up) go.push({ kind: 'launch', x, y, w: 1, h: 1 });
+  });
+  if (go.length) events.push(...special(board, go, { rng: game._rng, needs: stillNeeded(game) }));
+  return events;
 }
 
 // Curtains: every curtain cell whose color has been cleared often enough
@@ -466,7 +507,7 @@ export function* finishSteps(game, origins = []) {
 
     // Curtains open once enough of their color has been cleared this level.
     // What was behind them may fall or match, so the board settles again.
-    const opened = openCurtains(game);
+    const opened = [...openCurtains(game), ...liftsAndLamps(game)];
     if (opened.length === 0) {
       if (targetsMet(game) && game.act < (game.level.acts || []).length) {
         // The next act: a new board, with its own targets.
@@ -528,6 +569,7 @@ export function serialize(game) {
     },
     movesLeft: game.movesLeft,
     act: game.act || 0,
+    ...(game.secondsLeft !== undefined ? { secondsLeft: game.secondsLeft } : {}),
     targets: game.targets,
     status: game.status,
     tally: game.tally,
@@ -547,6 +589,7 @@ export function deserialize(data, dropRule = DROP_RULES.D1) {
     // An old save has no floor layer: that reads as no floor anywhere.
     board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}), ...(d.board.paint ? { paint: d.board.paint } : {}), ...(d.board.belts ? { belts: d.board.belts } : {}) },
     act: d.act || 0,
+    ...(d.secondsLeft !== undefined ? { secondsLeft: d.secondsLeft } : {}),
     movesLeft: d.movesLeft,
     targets: d.targets,
     status: d.status,

@@ -73,6 +73,8 @@ export function block(kind, extra = {}) {
     cell.hp = cell.colors.length;
   }
   if (def.toggles) cell.open = !!extra.open;
+  if (def.lift) { cell.hp = 1; cell.need = extra.need ?? 0; cell.left = cell.need; }
+  if (def.lamp) cell.hp = 1;
   if (def.curtain) {
     cell.hp = 1;
     cell.need = extra.need ?? 0;
@@ -249,7 +251,7 @@ export function anchorOf(board, x, y) {
 export function takesHit(cell, by, color) {
   if (!isBlock(cell)) return false;
   const def = obstacleDef(cell.kind);
-  if (def.curtain || def.charge) return false; // a curtain only opens by its count, a barrel by spikes
+  if (def.curtain || def.charge || def.lift || def.lamp) return false; // a curtain only opens by its count, a barrel by spikes
   if (def.retract || def.roll || def.vine) return def.hits[0] === 'any' || def.hits[0] === by;
   if (def.generator) return by === 'match'; // a power hit does nothing
   if (def.toggles && !cell.open) return false; // a closed makeup case
@@ -383,6 +385,12 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
     // A trophy: one thing that falls, from the middle of it.
     const p = cells[Math.floor((cells.length - 1) / 2)];
     set(board, p.x, p.y, drop(def.what));
+  } else if (leaves === 'dust') {
+    setFloor(board, x, y, 'dust');
+    out.push({ type: 'spread', kind: 'dust', cells: [{ x, y }] });
+  } else if (leaves === 'splat') {
+    const splash = paintCells(board, [[0, 0], [0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dy]) => ({ x: x + dx, y: y + dy })), { x, y });
+    if (splash) out.push(splash);
   } else if (leaves === 'under') {
     ev.rolled = cells;
     for (const p of cells) set(board, p.x, p.y, block(cell.under || 'crate'));
@@ -419,7 +427,7 @@ export function hitBlockEvents(board, x, y, by, color, rng, touched) {
       }
     }
     out.push({ type: 'goo', x, y, cells: laid });
-  } else if (['blast', 'bigblast', 'rocket', 'beam', 'toss', 'spike', 'laser', 'storm', 'bursts'].includes(leaves)) {
+  } else if (['blast', 'bigblast', 'rocket', 'beam', 'toss', 'spike', 'laser', 'storm', 'bursts', 'pop'].includes(leaves)) {
     ev.special = specialOf(def, leaves, cell, x, y);
     if (leaves === 'blast' || leaves === 'bigblast') ev.blast = true;
   }

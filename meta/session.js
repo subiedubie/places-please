@@ -170,6 +170,8 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     finish() {
       const game = session.game;
       if (!game) return null;
+      // Against the clock, every 10 seconds left count as a move left.
+      if (game.secondsLeft !== undefined) game.movesLeft = game.status === 'won' ? Math.floor(game.secondsLeft / 10) : 0;
       // (addBonusPay adds the per-piece coins of a bonus level; see meta/shop.js)
       const settlement = session.addBonusPay(game, settleLevel(game, names));
       const firstAttempt = events.firstAttempt(game.level.n);
