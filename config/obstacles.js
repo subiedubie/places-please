@@ -70,9 +70,12 @@ export const OBSTACLES2 = {
 // The batch-2 kinds the rules fully support. Levels may only use these.
 // ('confetti' is the floor kind levels may lay; 'petals' only appears when a
 // bouquet breaks, or when a hand-made level lists it in `floor`.)
+// (Left out on 23 Nov. 2026 because they were boring: 'tophat' and 'popper',
+// which never break and give something every third match beside them. Add
+// their names back to bring them back.)
 export const BATCH2_READY = [
   'confetti', 'bouquet',                              // 1 floor + bouquet
-  'tophat', 'popper', 'candyjar',                     // 2 generators + candy jar
+  'candyjar',                                         // 2 candy jar
   'planter', 'dovecote', 'truss', 'ticketbooth',      // 3 big blocks
   'footlights', 'fireworks',                          // 4 color-list blocks
   'makeupcase',                                       // 5 makeup case
