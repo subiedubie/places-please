@@ -18,7 +18,7 @@
 // win check) is repeated here on purpose, so game.js did not have to change.
 
 import {
-  get, set, cloneBoard, EMPTY, isPiece, isPower, isBlock, hitBlock,
+  get, set, cloneBoard, EMPTY, isPiece, isPower, isBlock, hitBlockEvents, spreadPaint,
 } from './board.js';
 import { fire } from './powers.js';
 import { stillNeeded } from './game.js'; // what a Ninja Star set off by a booster aims at
@@ -71,6 +71,8 @@ function recordEvents(game, events) {
     } else if (e.type === 'floor') {
       // A floor tile (confetti, petals) was removed.
       countBlock(game, e.kind);
+    } else if (e.type === 'paint') {
+      for (let i = 0; i < e.cells.length; i++) countBlock(game, 'paint_floor');
     } else if (e.type === 'spawn-power') {
       bump(tally.made, e.kind);
     } else if (e.type === 'cascade') {
@@ -134,13 +136,14 @@ function blast(game, coords, cause) {
       const key = bx + ',' + by;
       if (hitOnce.has(key)) continue;
       hitOnce.add(key);
-      const hit = hitBlock(board, bx, by, 'power', undefined, game._rng);
-      if (hit) blockHits.push(hit);
+      blockHits.push(...hitBlockEvents(board, bx, by, 'power', undefined, game._rng));
     }
     // anything else (empty cell, sandbag): untouched
   }
 
   if (cleared.length > 0) events.push({ type: 'clear', cause, cells: cleared });
+  const painted = spreadPaint(board, cleared);
+  if (painted) events.push(painted);
   events.push(...floorGone, ...blockHits);
   if (events.length > 0) events.push({ type: 'frame', board: cloneBoard(board) });
 

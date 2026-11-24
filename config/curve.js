@@ -808,7 +808,7 @@ export const CURVE = {
         candyjar: [3, 6],
         makeupcase: [4, 8],
         planter: [1, 3],
-        dovecote: [1, 3],
+        dovecote: [1, 2],
         footlights: [1, 2],
         fireworks: [2, 4],
         truss: [1, 2],

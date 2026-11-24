@@ -6,10 +6,10 @@
 
 import {
   createBoard, get, set, piece, cloneBoard, adjacent,
-  isPiece, isPower, isBlock, isDrop, isPart, EMPTY, POWER_KINDS, block, drop,
+  isPiece, isPower, isBlock, isDrop, isPart, isPainted, EMPTY, POWER_KINDS, block, drop,
   placeBlock, setFloor, floorAt, liftFloor, obstacleDef, anchorOf,
 } from './board.js';
-import { OBSTACLES2 } from '../config/obstacles.js';
+import { OBSTACLES2, DROPPERS } from '../config/obstacles.js';
 import { makeRng } from './rng.js';
 import { findGroups } from './matches.js';
 import { DROP_RULES } from './drops.js';
@@ -81,7 +81,7 @@ function placeObstacles(board, level, rng) {
   }
   for (const d of level.drops || []) {
     if (get(board, d.x, d.y) === null) continue;
-    set(board, d.x, d.y, drop());
+    set(board, d.x, d.y, drop(d.kind));
   }
   // The floor layer: level.floor = [{ x, y, kind }] ('confetti' or 'petals').
   for (const f of level.floor || []) {
@@ -103,6 +103,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
   if (findGroups(board).length > 0 || !hasLegalMove(board)) reshuffle(board, setupRng);
 
   placeTwists(board, level);
+  if (level.paint) board.paint = new Array(board.cells.length).fill(0);
 
   // Each gift replaces one ordinary piece, chosen at random. Replacing a piece
   // with a power-up cannot create a match, so the board stays clean.
@@ -176,9 +177,12 @@ function dropContext(game) {
 //     hit does nothing to it.
 // The (x, y) of the cell is optional; without it only the cell itself is judged.
 export function stillNeeded(game) {
+  const drops = Object.keys(DROPPERS).filter((k) => game.targets.some((t) => t.block === k && t.have < t.need));
   const open = (id) => game.targets.some((t) => t.block === id && t.have < t.need);
   const blockNeeded = (cell) => {
     if (open(cell.kind)) return true;
+    if (cell.kind === 'dovecote' && open('dove')) return true;
+    if (cell.kind === 'paintkeg' && open('paint_floor')) return true;
     const def = obstacleDef(cell.kind);
     if (def.product && !def.generator && open(def.product)) return true;
     return cell.kind === 'padlock' && isBlock(cell.inside) && blockNeeded(cell.inside);
@@ -190,9 +194,13 @@ export function stillNeeded(game) {
       const floor = floorAt(board, x, y);
       if (floor !== null && (open(floor) || open('treasure'))) return true;
     }
-    if (placed && open('sandbag')) {
-      for (let up = y - 1; up >= 0; up--) if (isDrop(get(board, x, up))) return true;
+    if (placed && drops.length) {
+      for (let up = y - 1; up >= 0; up--) {
+        const c = get(board, x, up);
+        if (isDrop(c) && drops.includes(c.kind)) return true;
+      }
     }
+    if (placed && open('paint_floor') && !isPainted(board, x, y)) return true;
     if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
     if (isPiece(cell)) {
       if (open('curtain') && board.cells.some((c) => isBlock(c) && c.kind === 'curtain' && c.color === cell.color)) return true;
@@ -249,6 +257,8 @@ function recordEvents(game, events) {
     } else if (e.type === 'floor') {
       // A bit of floor was removed ('confetti' or 'petals').
       countBlock(game, e.kind);
+    } else if (e.type === 'paint') {
+      for (let i = 0; i < e.cells.length; i++) countBlock(game, 'paint_floor');
     } else if (e.type === 'spawn-power') {
       bump(game.tally.made, e.kind);
     } else if (e.type === 'cascade') {
@@ -442,6 +452,12 @@ export function* finishSteps(game, origins = []) {
   // Never leave the player stuck.
   if (!hasLegalMove(board)) {
     reshuffle(board, game._rng);
+    // Nothing a shuffle can do (too few gems left in reach): a gem becomes a
+    // power-up, so there is always something to set off.
+    if (!hasLegalMove(board) && !board.cells.some(isPower)) {
+      const gems = board.cells.map((c, i) => (isPiece(c) ? i : -1)).filter((i) => i >= 0);
+      if (gems.length) board.cells[game._rng.pick(gems)] = { t: 'power', kind: 'under' };
+    }
     events.push({ type: 'reshuffle' }, { type: 'frame', board: cloneBoard(board) });
   }
 
@@ -463,6 +479,7 @@ export function serialize(game) {
       floor: game.board.floor || new Array(game.board.cells.length).fill(null),
       ...(game.board.revolves ? { revolves: game.board.revolves } : {}),
       ...(game.board.hidden ? { hidden: game.board.hidden } : {}),
+      ...(game.board.paint ? { paint: game.board.paint } : {}),
     },
     movesLeft: game.movesLeft,
     targets: game.targets,
@@ -482,7 +499,7 @@ export function deserialize(data, dropRule = DROP_RULES.D1) {
   const game = {
     level: d.level,
     // An old save has no floor layer: that reads as no floor anywhere.
-    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}) },
+    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}), ...(d.board.paint ? { paint: d.board.paint } : {}) },
     movesLeft: d.movesLeft,
     targets: d.targets,
     status: d.status,

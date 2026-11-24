@@ -515,6 +515,7 @@ test('batch 2: target needs match the board; at most 3 targets; moves stay in ra
       if (kind === 'tophat' || kind === 'popper') {
         expected[PRODUCT[kind]] = Math.min(B2.generators.needCap, Math.round((B2.generators.needPerPair * count) / 2));
       } else if (kind === 'candyjar') expected.candy = 3 * count;
+      else if (kind === 'dovecote') expected.dove = 3 * count;
       else expected[kind] = count;
     }
     const confetti = L.floor.length + 4 * (counts.planter || 0);

@@ -276,6 +276,58 @@ def mask():
 def glints():
     for x, y, s in ((-1.25, 1.2, .3), (1.22, 1.3, .22), (1.28, -1.1, .32), (-1.2, -1.25, .24)): slab(glow('#fff6c8', .6), rnd(star(s, x, y, .3, 4), .02), .5, .6, .02)
 
+# ---- Tortoise and paint keg --------------------------------------------------
+def tort_legs():
+    g = P('#8fd05a', .4, .4)
+    for x, y in ((-.58, -.48), (.58, -.48), (-.62, .42), (.62, .42)): ball(g, (x, y, -.2), .26, (1, 1, .7))
+    ball(g, (0, .78, -.2), .1, (.8, 1.4, .8))
+
+def tort_shell():
+    d, m, l = P('#0c7a4c'), P('#19b06c'), P('#4fe0a0')
+    ball(d, (0, .08, 0), .7, (1, .98, .62))
+    torus(P('#f0b43a'), (0, .08, -.02), .67, .09)
+    for k in range(6):
+        a = TAU * k / 6
+        slab(m, rnd(ngon(6, .21, 0, x=.39 * math.cos(a), y=.08 + .39 * math.sin(a)), .04), .34, .5, .05)
+    slab(l, rnd(ngon(6, .23, 0, x=0, y=.08), .04), .46, .62, .06)
+
+def tort_head():
+    g, k, w = P('#a8e070', .4, .4), P('#14162a', .15, 1), glow('#ffffff', .8)
+    ball(g, (0, -.54, .5), .36, (1.1, .95, .8))
+    for q in (-1, 1):
+        ball(w, (q * .17, -.47, .75), .13)
+        ball(k, (q * .16, -.49, .83), .085)
+        ball(w, (q * .16 - .03, -.45, .91), .03)
+        ball(P('#ff8fa8', .5, .2), (q * .3, -.62, .69), .07, (1, 1, .4))
+    tube(k, arc(0, -.56, .15, 210, 330, .82), .03)
+
+def tort_flower():
+    for k in range(5):
+        a = TAU * k / 5 + .3
+        ball(P('#ff4fb0'), (.17 * math.cos(a), .17 * math.sin(a), 0), .15, (1, 1, .5))
+    ball(P('#ffd43a'), (0, 0, .08), .11)
+
+def keg(hp):
+    w = [P('#8a5530', .45, .3), P('#a86a3c', .45, .3)]
+    for i in range(5):
+        x = -.6 + .3 * i
+        panel(w[i % 2], x, 0, .16, .82 - .06 * abs(i - 2), -.4 - .1 * abs(i - 2), .4 - .12 * abs(i - 2), .07, .07)
+    for y in (-.5, .5): panel(steel('#8f9bb4'), 0, y, .82, .1, -.3, .46, .05, .05)
+    p = P('#6a22e0', .12, 1)
+    drips = {3: [(-.3, .2), (.1, .34), (.42, .18)], 2: [(-.5, .5), (-.2, .8), (.14, .55), (.48, .9)], 1: [(-.56, 1.0), (-.28, 1.35), (.02, 1.0), (.3, 1.4), (.56, 1.1)]}[hp]
+    panel(p, 0, .8, .74, .16, -.3, .5, .1, .08)
+    for x, l in drips:
+        tube(p, [(x, .74, .46), (x, .74 - l, .48)], .13)
+        ball(p, (x, .74 - l, .48), .16, (1, 1.2, .8))
+
+def keg_splat():
+    p = P('#7a30f0', .1, 1)
+    for k in range(7):
+        a = TAU * k / 7
+        tube(p, [(0, 0, 0), (.5 * math.cos(a), .5 * math.sin(a), 0)], .13)
+        ball(p, (.6 * math.cos(a), .6 * math.sin(a), 0), .17)
+    ball(p, (0, 0, 0), .36, (1, 1, .6))
+
 # ---- The list ---------------------------------------------------------------
 # A layer is a function, its arguments, and how to photograph it. fit None means
 # "stay exactly where you were built"; otherwise fit, dx, dy work as in badges.py.
@@ -294,6 +346,9 @@ PIX['chameleon'] = (1, (S(cham_body, rim='#2a1a5a', px=5), S(cham_legs, rim='#2a
 PIX['turntable2'] = (2, (S(table_base, 2, rim=None), S(table_top, 2, rim='#6a3c10', px=3), S(table_arrows, 2, rim='#8a5010', px=2), S(table_pin, rim='#6a3c10', px=3)))
 PIX['turntable3'] = (3, (S(table_base, 3, rim=None), S(table_top, 3, rim='#6a3c10', px=3), S(table_arrows, 3, rim='#8a5010', px=2), S(table_hub, rim='#5a2a08')))
 PIX['treasure'] = (2, (S(case, rim='#3a1404', px=6), S(statue, rim='#6a2c00', px=5), S(mask, rim='#6a2c00', px=5), S(glints, rim='#b06a00', px=2)))
+
+PIX['tortoise'] = (1, (S(tort_legs, rim='#1c4a10', px=5), S(tort_shell, rim='#033a24', px=5), S(tort_flower, rim='#6a0440', fit=.3, dx=14, dy=20, px=3), S(tort_head, rim='#1c4a10', px=5)))
+for hp in (1, 2, 3): PIX[f'paintkeg-{hp}'] = (1, (S(keg, hp, rim='#2a1024', px=5), S(keg_splat, rim='#22086a', fit=.36, dy=-6, px=3)))
 
 for name, (n, layers) in PIX.items():
     if only and name not in only: continue

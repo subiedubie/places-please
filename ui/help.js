@@ -39,7 +39,7 @@ function addKind(set, kind) {
 function addBlock(set, b) {
   let cell = b;
   for (let depth = 0; cell && depth < 4; depth++) { // (4: a safe limit on nesting)
-    if (cell.t === 'drop') addKind(set, DROPPER_ID);
+    if (cell.t === 'drop') addKind(set, cell.kind || DROPPER_ID);
     else if (cell.kind && cell.t !== 'power' && cell.t !== 'piece') addKind(set, cell.kind);
     cell = cell.inside;
   }
@@ -56,7 +56,7 @@ export function kindsOnLevel(level) {
   const set = new Set();
   if (!level) return [];
   for (const b of level.blocks || []) addBlock(set, b);
-  if ((level.drops || []).length > 0) addKind(set, DROPPER_ID);
+  for (const d of level.drops || []) addKind(set, d.kind || DROPPER_ID);
   for (const f of level.floor || []) addKind(set, f && f.kind);
   if ((level.revolves || []).length > 0) addKind(set, 'revolve');
   for (const t of level.targets || []) if (t && typeof t.block === 'string') addKind(set, t.block);

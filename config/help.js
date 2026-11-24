@@ -31,6 +31,9 @@ export const RULES = {
   chameleon: 'A Chameleon changes color after every move. Match it while it is the color you need.',
   treasure: 'Clear all the confetti over a Hidden Treasure to collect it.',
   revolve: 'The Revolving Stage turns one step after every move. Plan for where the gems will be.',
+  tortoise: 'Bring the Tortoise down to the bottom. It leaves Petals all the way up its column, so clear those too.',
+  paintkeg: 'Break a Paint Keg with 3 hits. It splashes paint on two squares.',
+  paint_floor: 'Paint every square. A match or blast that touches paint paints all the squares it clears.',
   // Batch 1 obstacles
   crate:     'Make a match next to a Crate to break it.',
   hatbox:    'Make 2 matches next to a Hatbox to break it.',
@@ -56,7 +59,7 @@ export const RULES = {
   tophat:      'Make 3 matches next to a Top Hat to release a Dove. The hat never breaks.',
   popper:      'Make 3 matches next to a Popcorn Cart to pop one Popcorn. The cart never breaks.',
   candyjar:    'Make 3 matches next to a Candy Jar to empty it. Every hit gives one Candy.',
-  dovecote:    'Make 5 matches next to a Dovecote to break it. Power-ups do not hurt it.',
+  dovecote:    'Make 5 matches next to a Dovecote to break it. Power-ups do not hurt it. Three Doves fall out: bring them to the bottom.',
   footlights:  'Match each of the 4 colours shown on the Footlights next to them.',
   fireworks:   'Match each of the 3 colours shown on the Fireworks next to them. Then they go off like a Grenade.',
   truss:       'Hit a Lighting Truss with power-ups 2 times.',
@@ -65,7 +68,7 @@ export const RULES = {
   curtain:     "The meter on a Curtain shows how many more of its gem to clear, anywhere on the board. At 0 every Curtain of that color opens.",
 
   // Things a level can ask you to collect
-  dove:    'Make 3 matches next to a Top Hat to release each Dove.',
+  dove:    'Doves fall out of a broken Dovecote. Bring each one down to the bottom of the board.',
   popcorn: 'Make 3 matches next to a Popcorn Cart to pop each Popcorn.',
   candy:   'Every hit on a Candy Jar gives one Candy.',
 };
@@ -73,7 +76,7 @@ export const RULES = {
 // Names for the collectibles (the obstacles get their names from
 // config/obstacles.js).
 export const COLLECTIBLE_NAMES = {
-  propbomb: 'Prop Bomb', chameleon: 'Chameleon', treasure: 'Hidden Treasure', revolve: 'Revolving Stage',
+  propbomb: 'Prop Bomb', chameleon: 'Chameleon', treasure: 'Hidden Treasure', revolve: 'Revolving Stage', tortoise: 'Tortoise', paint_floor: 'Paint',
   dove: 'Dove',
   popcorn: 'Popcorn',
   candy: 'Candy',

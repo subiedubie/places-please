@@ -133,5 +133,12 @@ export function takeTurn(game) {
 export function syncTargets(game) {
   const t = game.targets.find((x) => x.block === 'ivy');
   if (t) t.need = t.have + countKind(game.board, 'ivy');
+  // Petals on a tortoise level: those lying now, and a column for each tortoise to come.
+  const p = game.targets.find((x) => x.block === 'petals');
+  if (p && (game.level.drops || []).some((d) => d.kind === 'tortoise')) {
+    const tor = game.targets.find((x) => x.block === 'tortoise');
+    const lying = (game.board.floor || []).filter((f) => f === 'petals').length;
+    p.need = p.have + lying + (tor ? tor.need - tor.have : 0) * game.board.rows;
+  }
   // (A fizzled bomb may leave crates; they count only if the level asks for crates.)
 }

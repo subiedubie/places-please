@@ -34,7 +34,7 @@
 
 import {
   EMPTY, get, set, inBounds, cloneBoard, isPiece, isPower, power,
-  isBlock, isPart, isDrop, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor,
+  isBlock, isPart, isDrop, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor, isPainted, spreadPaint,
 } from './board.js';
 
 // The name a cell goes by inside the "already fired" and "already cleared" sets.
@@ -73,7 +73,7 @@ function pushFrame(run) {
 //     block accepts power hits right now) and is then left alone for the rest
 //     of this effect, whatever it turned into. It is NOT added to
 //     run.cleared, so a later effect in the chain can hit it again.
-function clearArea(run, coords, cause, chain = true) {
+function clearArea(run, coords, cause, chain = true, carry = false) {
   const { board } = run;
   const cells = [];
   const blockHits = [];
@@ -116,6 +116,8 @@ function clearArea(run, coords, cause, chain = true) {
     }
   }
   if (cells.length > 0) run.events.push({ type: 'clear', cause, cells });
+  const painted = spreadPaint(board, cells, carry); // paint goes where the blast goes
+  if (painted) run.events.push(painted);
   run.events.push(...blockHits);
   return cells;
 }
@@ -238,7 +240,7 @@ function flyAndClear(run, from, cause, footprint) {
   const to = chooseTarget(run, footprint);
   if (to === null) return null;
   run.events.push({ type: 'fly', from: { x: from.x, y: from.y }, to });
-  clearArea(run, [to], cause);
+  clearArea(run, [to], cause, true, isPainted(run.board, from.x, from.y)); // a star from a painted square carries paint
   return to;
 }
 

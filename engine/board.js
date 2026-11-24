@@ -19,6 +19,7 @@
 //                                      and is collected at the bottom of its column
 
 import { OBSTACLES, OBSTACLES2, DROPPER } from '../config/obstacles.js';
+import { TWISTS } from '../config/twists.js';
 
 // The config entry for an obstacle kind, from either batch.
 export function obstacleDef(kind) {
@@ -99,8 +100,8 @@ export function placeBlock(board, x, y, kind, extra = {}) {
 }
 
 // A new dropper (the sandbag).
-export function drop() {
-  return { t: 'drop', kind: DROPPER.id };
+export function drop(kind = DROPPER.id) {
+  return { t: 'drop', kind };
 }
 
 export function createBoard(cols, rows, holes = []) {
@@ -131,6 +132,7 @@ export function cloneBoard(b) {
   if (b.floor) copy.floor = b.floor.slice(); // old boards may have no floor
   if (b.revolves) copy.revolves = b.revolves; // (these two are never changed in place)
   if (b.hidden) copy.hidden = b.hidden;
+  if (b.paint) copy.paint = b.paint.slice();
   return copy;
 }
 
@@ -154,6 +156,29 @@ export function liftFloor(b, x, y) {
   if (kind === null) return null;
   setFloor(b, x, y, null);
   return { type: 'floor', x, y, kind };
+}
+
+// PAINT (only on paint levels): board.paint holds 1 for every painted cell.
+export const isPainted = (b, x, y) => Boolean(b.paint && inBounds(b, x, y) && b.paint[y * b.cols + x]);
+
+// Paint cells. Returns the 'paint' event for the ones that were not painted
+// yet, or null. `from`: the keg the paint flew out of, if it did.
+export function paintCells(b, cells, from) {
+  if (!b.paint) return null;
+  const fresh = [];
+  for (const { x, y } of cells) {
+    if (get(b, x, y) === null || isPainted(b, x, y)) continue;
+    b.paint[y * b.cols + x] = 1;
+    fresh.push({ x, y });
+  }
+  if (!fresh.length) return null;
+  return { type: 'paint', x: fresh[0].x, y: fresh[0].y, cells: fresh, ...(from ? { from } : {}) };
+}
+
+// Cells cleared together: if one of them is painted (or `carry`), all are.
+export function spreadPaint(b, cells, carry = false) {
+  if (!b.paint || !(carry || cells.some((c) => isPainted(b, c.x, c.y)))) return null;
+  return paintCells(b, cells);
 }
 
 export function adjacent(a, b) {
@@ -311,6 +336,22 @@ export function hitBlockEvents(board, x, y, by, color, rng) {
       laid.push({ x: x + dx, y: y + dy });
     }
     out.push({ type: 'spread', kind: 'petals', cells: laid });
+  } else if (leaves === 'doves') {
+    // Dovecote: a dove in all of its cells but one.
+    const gap = rng ? rng.int(cells.length) : cells.length - 1;
+    cells.forEach((p, i) => { if (i !== gap) set(board, p.x, p.y, drop('dove')); });
+  } else if (leaves === 'paint') {
+    // Paint keg: paint flies to squares anywhere on the board.
+    const dry = [];
+    for (let py = 0; py < board.rows; py++) {
+      for (let px = 0; px < board.cols; px++) {
+        if (get(board, px, py) !== null && !isPainted(board, px, py)) dry.push({ x: px, y: py });
+      }
+    }
+    const hit = [];
+    for (let i = 0; i < TWISTS.kegSplash && dry.length; i++) hit.push(dry.splice(rng ? rng.int(dry.length) : 0, 1)[0]);
+    const splash = paintCells(board, hit, { x, y });
+    if (splash) out.push(splash);
   } else if (leaves === 'blast') {
     ev.blast = true; // fireworks: the caller sets off the blast
   }

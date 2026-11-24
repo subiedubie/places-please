@@ -1458,7 +1458,7 @@ function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
   const u = size * 0.42;
   const lw = edgeW(u);
   // How many hits it needs when new, how many are left, how many have landed.
-  const info = OBSTACLES[cell.kind];
+  const info = OBSTACLES[cell.kind] || OBSTACLES2[cell.kind];
   const hits = info && Array.isArray(info.hits) ? info.hits : [];
   const full = hits.length || 1;
   const hp = plain || typeof cell.hp !== 'number' ? full : Math.max(0, Math.min(full, cell.hp));
@@ -1511,8 +1511,8 @@ function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
 // Sandbag (the dropper): a heavy tan sack with a flat bottom, tied at the
 // neck, hanging from a rope ring, with a big white DOWN arrow: it has to be
 // brought down to the bottom of its column.
-function drawDrop(ctx, cx, cy, size, theme) {
-  if (drawArt(ctx, DROPPER.id, cx, cy, size, size)) return;
+function drawDrop(ctx, cx, cy, size, theme, kind = DROPPER.id) {
+  if (drawArt(ctx, kind, cx, cy, size, size)) return;
   const oc = theme.obstacleColors || {};
   const u = size * 0.42;
   const lw = edgeW(u);
@@ -1560,7 +1560,7 @@ function drawContent(ctx, cell, cx, cy, size, theme) {
   }
   else if (cell.t === 'power') drawPower(ctx, cell.kind, cx, cy, size, theme);
   else if (cell.t === 'block') drawBlock(ctx, cell, cx, cy, size, theme, false);
-  else if (cell.t === 'drop') drawDrop(ctx, cx, cy, size, theme);
+  else if (cell.t === 'drop') drawDrop(ctx, cx, cy, size, theme, cell.kind);
   // { t: 'empty' } has nothing to draw: the plain cell square shows.
 }
 
@@ -1583,7 +1583,8 @@ export function drawTargetIcon(ctx, target, size, theme) {
     const kind = target.block;
     const oc = theme.obstacleColors || {};
     if (kind === DROPPER.id) drawDrop(ctx, mid, mid, size, theme);
-    else if (['propbomb', 'chameleon', 'treasure', 'revolve'].includes(kind)) {
+    else if (kind === 'paint_floor') drawPaint(ctx, { cols: 1, rows: 1, paint: [1] }, { originX: 0, originY: 0, cell: size }, true);
+    else if (['propbomb', 'chameleon', 'treasure', 'revolve', 'tortoise'].includes(kind)) {
       // Twists that are not obstacles.
       drawArt(ctx, kind === 'revolve' ? 'turntable2' : kind, mid, mid, size, size);
     }
@@ -1626,6 +1627,46 @@ export function drawCellPicture(ctx, cell, cx, cy, size, theme, opts) {
 }
 
 // The tray the board sits in, its cells, and the floor layer.
+// Wet purple paint: painted cells side by side run together into one pool.
+function drawPaint(ctx, board, layout, alone) {
+  if (!board.paint) return;
+  const { originX, originY, cell } = layout;
+  const on = (x, y) => x >= 0 && y >= 0 && x < board.cols && y < board.rows && board.paint[y * board.cols + x];
+  const pool = (inset, color) => {
+    ctx.fillStyle = color;
+    const r = cell * 0.26;
+    for (let y = 0; y < board.rows; y++) {
+      for (let x = 0; x < board.cols; x++) {
+        if (!on(x, y)) continue;
+        const l = on(x - 1, y), t = on(x, y - 1), ri = on(x + 1, y), b = on(x, y + 1);
+        const x0 = originX + x * cell + (l ? -0.5 : inset), y0 = originY + y * cell + (t ? -0.5 : inset);
+        const x1 = originX + (x + 1) * cell - (ri ? -0.5 : inset), y1 = originY + (y + 1) * cell - (b ? -0.5 : inset);
+        ctx.beginPath();
+        ctx.roundRect(x0, y0, x1 - x0, y1 - y0, [l || t ? 0 : r, t || ri ? 0 : r, ri || b ? 0 : r, b || l ? 0 : r]);
+        ctx.fill();
+      }
+    }
+  };
+  const g = cell * (alone ? 0.06 : 0.03);
+  pool(g, '#2c0a78');
+  pool(g + cell * 0.05, '#5a22c8');
+  // a wet gleam along the top edge of the pool
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = cell * 0.06;
+  ctx.lineCap = 'round';
+  for (let y = 0; y < board.rows; y++) {
+    for (let x = 0; x < board.cols; x++) {
+      if (!on(x, y) || on(x, y - 1)) continue;
+      ctx.beginPath();
+      ctx.moveTo(originX + (x + 0.3) * cell, originY + (y + 0.14) * cell);
+      ctx.lineTo(originX + (x + 0.62) * cell, originY + (y + 0.14) * cell);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 export function drawTray(ctx, board, layout, theme, shade) {
   const { originX, originY, cell } = layout;
   const ui = theme.ui;
@@ -1680,6 +1721,8 @@ export function drawTray(ctx, board, layout, theme, shade) {
   for (const t of board.hidden || []) {
     if (!t.found) drawArt(ctx, 'treasure', originX + (t.x + t.w / 2) * cell, originY + (t.y + t.h / 2) * cell, t.w * cell, t.h * cell);
   }
+
+  drawPaint(ctx, board, layout, false);
 
   // The floor layer (confetti, petals), on top of the lighter squares and
   // under everything else. A board saved before floors existed has no

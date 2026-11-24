@@ -256,7 +256,7 @@ test('fall events give each thing one entry, from its start to its final cell', 
 test('a dropper falls like a piece and is collected at the bottom', () => {
   const board = boardFrom(['d1', '.2', '.3']);
   const ev = settle(board, quietCtx());
-  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 0, y: 2, kind: 'sandbag' }]);
+  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 0, y: 2, kind: 'sandbag', drop: true }]);
   assert.ok(!board.cells.some(isDrop), 'the dropper has left the board');
   assert.ok(board.cells.every((c) => !isEmpty(c)), 'and its column was refilled');
 });
@@ -264,7 +264,7 @@ test('a dropper falls like a piece and is collected at the bottom', () => {
 test('a dropper above a hole is collected at the lowest real cell', () => {
   const board = boardFrom(['d', '.', '#']);
   const ev = settle(board, quietCtx());
-  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 0, y: 1, kind: 'sandbag' }]);
+  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 0, y: 1, kind: 'sandbag', drop: true }]);
 });
 
 test('a dropper is never part of a match', () => {
@@ -279,7 +279,7 @@ test('a Grenade does not clear a dropper; it falls and is collected afterwards',
   fire(board, { x: 2, y: 2 }, {});
   assert.ok(isDrop(get(board, 1, 1)), 'still there after the blast');
   const ev = settle(board, quietCtx());
-  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 1, y: 4, kind: 'sandbag' }]);
+  assert.deepEqual(events(ev, 'collect'), [{ type: 'collect', x: 1, y: 4, kind: 'sandbag', drop: true }]);
   assert.ok(!board.cells.some(isDrop));
 });
 

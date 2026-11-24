@@ -22,7 +22,7 @@ const PROP_COLORS = {
   crate: 0xc98b4a, hatbox: 0xe85a9b, trunk: 0x8a5530, dryice: 0x6fd6ff, cashbox: 0x7c9cc4,
   flat: 0xc9bfae, strongbox: 0x55606f, costume: 0x1fb5a8, padlock: 0xe0a100, planter: 0x4caf50,
   bouquet: 0xff7aa8, candyjar: 0xff5a6e, dovecote: 0xd94b3d, footlights: 0x44506b,
-  fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5, ivy: 0x3fae49, mouse: 0xa9a9b8,
+  fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5, ivy: 0x3fae49, mouse: 0xa9a9b8, paintkeg: 0x6a2ce0, dove: 0xffffff, tortoise: 0x3fae6a,
 };
 
 export async function createStage(canvas, theme) {
@@ -204,7 +204,7 @@ export async function createStage(canvas, theme) {
     const k = [layout.cell, layout.originX, layout.originY, layout.canvasW, layout.canvasH, dpr].join()
       + '|' + board.cols + '|' + board.cells.map((c) => (c === null ? '#' : '.')).join('')
       + '|' + (board.floor || []).map((f) => (f ? f[0] : '-')).join('')
-      + '|' + JSON.stringify([board.revolves, board.hidden]);
+      + '|' + JSON.stringify([board.revolves, board.hidden]) + '|' + (board.paint || []).join('');
     if (k === trayKey) return;
     trayKey = k;
     for (const [sprite, shade] of [[tray, false], [dim, true]]) {
@@ -421,6 +421,24 @@ export async function createStage(canvas, theme) {
     bit(ringTex(), X(x), Y(y), s * 0.4, 0xffb300, { life: 0.42, grow: 5 });
     for (let i = 0; i < 10; i++) spark(X(x), Y(y), 0xffc94d, s * 3.2);
   }
+  // Paint lands on cell `to` (from a keg, or spreading there).
+  function splash(from, to) {
+    if (!layout || !live) return;
+    const s = layout.cell;
+    if (from) {
+      for (let i = 0; i < 5; i++) {
+        const life = 0.36 + i * 0.03;
+        bit(softDot(), X(from.x), Y(from.y), s * (0.8 - i * 0.1), 0x5a1fd0,
+          { vx: (X(to.x) - X(from.x)) / life, vy: (Y(to.y) - Y(from.y)) / life, life });
+      }
+    }
+    for (let i = 0; i < 7; i++) {
+      const t = Math.random() * 6.283;
+      bit(softDot(), X(to.x), Y(to.y), s * (0.16 + Math.random() * 0.22), 0x6a2ce0,
+        { vx: Math.cos(t) * s * 2.4, vy: Math.sin(t) * s * 2.4 - s, g: s * 8, life: 0.4 + Math.random() * 0.25 });
+    }
+  }
+  fx.splash = splash;
   fx.burst = burst;
   fx.trail = trail;
   fx.spark = born;

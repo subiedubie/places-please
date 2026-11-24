@@ -31,6 +31,8 @@ export const OBSTACLES = {
 // The one obstacle that moves: it falls like a piece and is collected when it
 // reaches the bottom of its column (like the Frog).
 export const DROPPER = { id: 'sandbag', name: 'Sandbag' };
+// Every kind of thing that falls and is collected at the bottom.
+export const DROPPERS = { sandbag: 'Sandbag', dove: 'Dove', tortoise: 'Tortoise' };
 
 // ---- Batch 2 (docs/OBSTACLES2.md) -------------------------------------------
 //
@@ -58,7 +60,7 @@ export const OBSTACLES2 = {
   tophat:      { name: 'Top Hat',        size: [1, 1], hits: [], generator: true, every: 3, product: 'dove' },    // like the Magic Hat
   popper:      { name: 'Popcorn Cart',   size: [1, 1], hits: [], generator: true, every: 3, product: 'popcorn' }, // like the Cauldron
   candyjar:    { name: 'Candy Jar',      size: [1, 1], hits: ['any', 'any', 'any'], product: 'candy' },           // like the Jar
-  dovecote:    { name: 'Dovecote',       size: [2, 2], hits: M5 },                                // like the Birdhouse
+  dovecote:    { name: 'Dovecote',       size: [2, 2], hits: M5, leaves: 'doves' },               // like the Birdhouse: doves fall out
   footlights:  { name: 'Footlights',     size: [2, 2], hits: [], colorList: 4 },                  // like the Light Bulb
   fireworks:   { name: 'Fireworks',      size: [2, 1], hits: [], colorList: 3, leaves: 'blast' }, // like the Dynamite Box
   truss:       { name: 'Lighting Truss', size: [3, 1], hits: ['power', 'power'] },                // like the Metal Tube
@@ -67,6 +69,7 @@ export const OBSTACLES2 = {
   // Twists (config/twists.js): they act by themselves; see engine/twists.js.
   ivy:         { name: 'Creeping Ivy',   size: [1, 1], hits: ['any'], twist: true },
   mouse:       { name: 'Stage Mouse',    size: [1, 1], hits: ['any'], twist: true },
+  paintkeg:    { name: 'Paint Keg',      size: [1, 1], hits: ['any', 'any', 'any'], leaves: 'paint', twist: true }, // bursts and splashes paint
   curtain:     { name: 'Curtain',        size: [1, 1], hits: [], curtain: true },                 // like the Curtain
 };
 

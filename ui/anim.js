@@ -170,7 +170,7 @@ function splitSteps(events, before) {
     } else if (ev.type === 'fall' && Array.isArray(ev.falls)) step.falls.push(...ev.falls);
     else if (ev.type === 'refill' && Array.isArray(ev.spawns)) step.spawns.push(...ev.spawns);
     else if (ev.type === 'slide' && Array.isArray(ev.moves)) step.slides.push(...ev.moves);
-    else if ((ev.type === 'grow' || ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor') && isPos(ev)) step.hits.push(ev);
+    else if ((ev.type === 'grow' || ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor' || ev.type === 'paint') && isPos(ev)) step.hits.push(ev);
     else if (ev.type === 'fly' && isPos(ev.from) && isPos(ev.to)) step.flies.push(ev);
     else if (ev.type === 'transform' && Array.isArray(ev.cells)) {
       for (const c of ev.cells) {
@@ -291,7 +291,14 @@ function hitExtras(hits, before) {
       flashes.push({ x: h.x, y: h.y, alpha: 0.5, peak: 0.5 });
       continue;
     }
-    if (h.type === 'collect' && h.kind && h.kind !== 'sandbag') {
+    if (h.type === 'paint') {
+      for (const c of h.cells) {
+        flashes.push({ x: c.x, y: c.y, alpha: 0.8, peak: 0.8 });
+        emit('splash', h.from || null, c);
+      }
+      continue;
+    }
+    if (h.type === 'collect' && h.kind && h.kind !== 'sandbag' && !h.drop) {
       // A dove, popcorn or candy given out by a generator (or any collect
       // kind added later): the generator stays, so just flash its cell.
       flashes.push({ x: h.x, y: h.y, alpha: 1 });

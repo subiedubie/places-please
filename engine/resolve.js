@@ -6,7 +6,7 @@
 
 import {
   get, set, cloneBoard, piece, power, EMPTY,
-  isEmpty, isHole, isFixed, isDrop, isMovable, isPiece, hitBlockEvents, anchorOf, liftFloor,
+  isEmpty, isHole, isFixed, isDrop, isMovable, isPiece, hitBlockEvents, anchorOf, liftFloor, floorAt, setFloor, spreadPaint,
 } from './board.js';
 import { blast } from './powers.js';
 import { findGroups, powerForShape } from './matches.js';
@@ -158,7 +158,17 @@ function collectDroppers(board) {
       // This is the column's lowest real cell: collect it if it is a dropper.
       if (isDrop(cell)) {
         set(board, x, y, EMPTY);
-        collected.push({ type: 'collect', x, y, kind: cell.kind });
+        collected.push({ type: 'collect', x, y, kind: cell.kind, drop: true });
+        // A tortoise leaves petals all the way up its column.
+        if (cell.kind === 'tortoise') {
+          const cells = [];
+          for (let up = board.rows - 1; up >= 0; up--) {
+            if (get(board, x, up) === null || floorAt(board, x, up) !== null) continue;
+            setFloor(board, x, up, 'petals');
+            cells.push({ x, y: up });
+          }
+          collected.push({ type: 'spread', kind: 'petals', cells });
+        }
       }
       break;
     }
@@ -309,6 +319,8 @@ export function* settleSteps(board, ctx, origins = []) {
         const lifted = liftFloor(board, c.x, c.y);
         if (lifted) events.push(lifted);
       }
+      const painted = spreadPaint(board, cells);
+      if (painted) events.push(painted);
       // A prop bomb matched in time goes off like a Grenade, for the player.
       for (const c of cells) {
         if (c.was.fuse !== undefined) events.push(...blast(board, { x: c.x, y: c.y }, { rng: ctx.rng, needs: ctx.needs }));

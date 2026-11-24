@@ -11,17 +11,20 @@ export function twistsFor(n, tier, cfg = TWISTS) {
   const rng = makeRng(n).fork('twists');
   if (known.length === 0 || rng.next() >= cfg.share[tier]) return [];
   const first = rng.pick(known);
-  const rest = known.filter((k) => k !== first);
+  if (first === 'paint') return ['paint'];
+  const rest = known.filter((k) => k !== first && k !== 'paint' && k !== 'tortoise');
   return rest.length && rng.next() < cfg.secondShare ? [first, rng.pick(rest)] : [first];
 }
 
-const TARGET = { ivy: 'ivy', mouse: 'mouse', propbomb: 'propbomb', chameleon: 'chameleon', treasure: 'treasure' };
+const TARGET = { ivy: 'ivy', mouse: 'mouse', propbomb: 'propbomb', chameleon: 'chameleon', treasure: 'treasure', tortoise: 'tortoise', doves: 'dove' };
 
 // Returns the level with its twists added (the level itself if it has none).
 export function addTwists(level, cfg = TWISTS) {
   const wanted = twistsFor(level.n, level.tier, cfg);
   if (wanted.length === 0) return level;
   const rng = makeRng(level.n).fork('twist-places');
+  if (wanted[0] === 'tortoise') level = { ...level, blocks: [], drops: [], floor: [], holes: level.holes.length > 6 ? [] : level.holes, targets: [] };
+  if (wanted[0] === 'paint') return paintLevel(level, rng, cfg);
   const L = { ...level, blocks: level.blocks.slice(), floor: level.floor.slice(), targets: level.targets.slice(), specials: [], revolves: [], hidden: [] };
 
   // Cells already spoken for.
@@ -68,6 +71,34 @@ export function addTwists(level, cfg = TWISTS) {
         L.revolves.push({ x: p.x, y: p.y, size });
         made++;
       }
+    } else if (kind === 'tortoise') {
+      // A level of its own: in the top rows, one to a column, away from the
+      // edges. Two targets: itself and the petals.
+      const columns = [];
+      for (let x = 1; x < L.cols - 1; x++) if (clear(x, 0, 1, L.rows)) columns.push(x);
+      for (let i = 0; i < n && columns.length; i++) {
+        const x = columns.splice(rng.int(columns.length), 1)[0];
+        const y = 1 + rng.int(2);
+        take(x, 0, 1, L.rows);
+        L.drops = L.drops.concat({ x, y, kind: 'tortoise' });
+        made++;
+      }
+      L.targets.push({ block: 'tortoise', need: made }, { block: 'petals', need: made * L.rows });
+      extra += made * cfg.moves.tortoise;
+      continue;
+    } else if (kind === 'doves') {
+      if (L.blocks.some((b) => b.kind === 'dovecote')) continue; // it has them already
+      for (let i = 0; i < n; i++) {
+        const at = spots(2, 2, 1).filter((p) => p.y <= L.rows / 2);
+        if (!at.length) continue;
+        const p = rng.pick(at);
+        take(p.x, p.y, 2, 2);
+        L.blocks.push({ ...p, kind: 'dovecote' });
+        made++;
+      }
+      if (made) L.targets.push({ block: 'dove', need: 3 * made });
+      extra += made * cfg.moves.doves;
+      continue;
     } else if (kind === 'treasure') {
       if (L.floor.length > 0) continue; // the confetti is busy
       for (let i = 0; i < n; i++) {
@@ -112,6 +143,26 @@ export function addTwists(level, cfg = TWISTS) {
   if (L.targets.length === 0) L.targets = level.targets.slice();
   L.moves = Math.min(60, Math.round(level.moves + extra));
   return L;
+}
+
+// A paint level: the board's own shape, nothing on it but paint kegs.
+function paintLevel(level, rng, cfg) {
+  const holes = new Set(level.holes.map((h) => h.x + ',' + h.y));
+  const open = [];
+  for (let y = 0; y < level.rows; y++) for (let x = 0; x < level.cols; x++) if (!holes.has(x + ',' + y)) open.push({ x, y });
+  const n = cfg.counts.paint[0] + rng.int(cfg.counts.paint[1] - cfg.counts.paint[0] + 1);
+  const blocks = [];
+  let spots = open.filter((p) => p.y >= 2);
+  while (blocks.length < n && spots.length) {
+    const p = rng.pick(spots);
+    blocks.push({ ...p, kind: 'paintkeg' });
+    spots = spots.filter((q) => Math.abs(q.x - p.x) + Math.abs(q.y - p.y) > 2);
+  }
+  return {
+    ...level, paint: true, blocks, drops: [], floor: [], specials: [], revolves: [], hidden: [],
+    targets: [{ block: 'paint_floor', need: open.length }],
+    moves: Math.min(60, Math.round(open.length * cfg.paintMoves[level.tier])),
+  };
 }
 
 // How many cells a block covers.

@@ -216,6 +216,7 @@ function buildObstacles(n, tier, cols, rows, holes, colors, kindLimit, targetLim
   // Put block `b` on the board if all its cells are free and the board
   // stays safe. Returns true when it was placed.
   const tryPut = (b) => {
+    if (b.kind === 'dovecote' && b.y > rows / 2) return false; // the doves need a way to go
     const cells = cellsOf(b);
     if (!cells.every(([x, y]) => free(x, y))) return false;
     put(b);
@@ -495,6 +496,8 @@ function obstacleTargets(blocks, drops, floor, curve) {
         const need = Math.min(g.needCap, Math.round((g.needPerPair * count) / 2));
         return { block: kind === 'tophat' ? 'dove' : 'popcorn', need };
       }
+      // Dovecotes: every dove that falls out.
+      if (kind === 'dovecote') return { block: 'dove', need: 3 * count };
       // Candy jars: every candy of every jar.
       if (kind === 'candyjar') return { block: 'candy', need: b2.candyPerJar * count };
       // Everything else: all of them (for curtains, every curtain cell).
