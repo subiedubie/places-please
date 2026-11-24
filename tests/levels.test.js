@@ -287,7 +287,7 @@ test('obstacle targets ask for everything on the board; moves follow the allowan
     const e = O.extraMoves;
     let extra = L.drops.length * e.perSandbag;
     const hits = (kind) => OBSTACLES[kind].hits.reduce((sum, h) => sum + (h === 'power' ? e.perPowerHit : e.perMatchHit), 0);
-    for (const b of L.blocks) extra += hits(b.kind) + (b.inside && b.inside.t === 'block' ? hits(b.inside.kind) : 0);
+    for (const b of L.blocks) extra += (b.w || 1) * hits(b.kind) + (b.inside && b.inside.t === 'block' ? hits(b.inside.kind) : 0);
     // Within one move: the generator adds the same allowances in a different
     // order, and a total landing on a half can round either way.
     const expected = Math.min(e.cap, Math.round(CURVE.baseMoves[L.tier] + extra));
@@ -381,7 +381,7 @@ test('batch 2: blocks fit on the board, never overlap, keep 40% ordinary; power-
     for (const b of L.blocks) {
       const [w, h] = blockSize(b);
       if (b.kind === 'truss') assert.ok(Number.isInteger(b.w) && b.w >= 3 && b.w <= L.cols, `level ${n} truss width`);
-      else assert.equal(b.w, undefined, `level ${n} w on ${b.kind}`);
+      else if (b.kind !== 'dryice') assert.equal(b.w, undefined, `level ${n} w on ${b.kind}`);
       assert.ok(b.y >= 2, `level ${n} ${b.kind} in the top two rows`);
       assert.ok(b.x >= 0 && b.x + w <= L.cols && b.y + h <= L.rows, `level ${n} ${b.kind} off the board`);
       for (const c of cellsOf(b)) {

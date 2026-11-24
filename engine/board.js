@@ -53,12 +53,16 @@ export function block(kind, extra = {}) {
   if (extra.inside !== undefined && extra.inside !== null) cell.inside = extra.inside;
   if (def.size) {
     const w = extra.w ?? def.size[0];
-    const h = def.size[1];
+    const h = extra.h ?? def.size[1];
     if (w > 1 || h > 1) {
       cell.w = w;
       cell.h = h;
     }
   }
+  if (def.retract) cell.hp = cell.w || 1;
+  if (def.roll) cell.hp = cell.h || 1;
+  if (def.vine) cell.seg = new Array(cell.w || 1).fill(2); // layers left on each square, the pot first
+  if (def.charge) { cell.hp = 1; cell.charge = def.charge; } // spikes still to come
   if (def.generator) {
     cell.hp = 1; // never goes down: a generator cannot break
     cell.count = extra.count ?? 0; // match hits so far
@@ -133,6 +137,7 @@ export function cloneBoard(b) {
   if (b.revolves) copy.revolves = b.revolves; // (these two are never changed in place)
   if (b.hidden) copy.hidden = b.hidden;
   if (b.paint) copy.paint = b.paint.slice();
+  if (b.belts) copy.belts = b.belts; // (never changed in place)
   return copy;
 }
 
@@ -244,7 +249,8 @@ export function anchorOf(board, x, y) {
 export function takesHit(cell, by, color) {
   if (!isBlock(cell)) return false;
   const def = obstacleDef(cell.kind);
-  if (def.curtain) return false; // a curtain only opens by its count
+  if (def.curtain || def.charge) return false; // a curtain only opens by its count, a barrel by spikes
+  if (def.retract || def.roll || def.vine) return def.hits[0] === 'any' || def.hits[0] === by;
   if (def.generator) return by === 'match'; // a power hit does nothing
   if (def.toggles && !cell.open) return false; // a closed makeup case
   if (cell.colors) return by === 'power' || cell.colors.includes(color);
@@ -268,7 +274,10 @@ export function takesHit(cell, by, color) {
 //   { type: 'spread', kind, cells }     new floor laid (planter, bouquet)
 // When the last hit lands, the cells become what the config says it leaves.
 // `rng` is only used for random power-ups.
-export function hitBlockEvents(board, x, y, by, color, rng) {
+// `touched`: the cells of the block that were hit (for a vine, which is cut
+// where it is hit). `ev.special` says what it sets off; the CALLER carries it
+// out (special() in powers.js).
+export function hitBlockEvents(board, x, y, by, color, rng, touched) {
   const at = anchorOf(board, x, y);
   if (!at || !takesHit(at.cell, by, color)) return [];
   const cell = at.cell;
@@ -281,6 +290,34 @@ export function hitBlockEvents(board, x, y, by, color, rng) {
     ev.h = cell.h;
   }
   const out = [ev];
+
+  if (def.vine) return hitVine(board, cell, x, y, ev, touched || [{ x, y }]);
+  if (def.retract && (cell.w || 1) > 1) {
+    const end = { x: x + cell.w - 1, y };
+    const w = cell.w - 1;
+    const short = { ...cell, w, hp: w };
+    if (w === 1) { delete short.w; delete short.h; }
+    set(board, x, y, short);
+    set(board, end.x, end.y, EMPTY);
+    ev.hpLeft = w;
+    ev.freed = [end];
+    const lifted = liftFloor(board, end.x, end.y);
+    if (lifted) out.push(lifted);
+    return out;
+  }
+  if (def.roll) {
+    const h = (cell.h || 1) - 1;
+    const w = cell.w || 1;
+    ev.hpLeft = h;
+    ev.destroyed = h === 0;
+    if (h > 0) set(board, x, y, { ...cell, h, hp: h });
+    ev.rolled = [];
+    for (let i = 0; i < w; i++) {
+      set(board, x + i, y + h, block(cell.under || 'crate'));
+      ev.rolled.push({ x: x + i, y: y + h });
+    }
+    return out;
+  }
 
   // A generator never breaks: it counts match hits and hands out its product
   // on every third one (the number is `every` in the config).
@@ -352,8 +389,67 @@ export function hitBlockEvents(board, x, y, by, color, rng) {
     for (let i = 0; i < TWISTS.kegSplash && dry.length; i++) hit.push(dry.splice(rng ? rng.int(dry.length) : 0, 1)[0]);
     const splash = paintCells(board, hit, { x, y });
     if (splash) out.push(splash);
-  } else if (leaves === 'blast') {
-    ev.blast = true; // fireworks: the caller sets off the blast
+  } else if (leaves === 'goo') {
+    // Greasepaint: covers the gems around it.
+    const laid = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const c = get(board, x + dx, y + dy);
+        if (!(isPiece(c) || (dx === 0 && dy === 0))) continue;
+        set(board, x + dx, y + dy, block('goo'));
+        laid.push({ x: x + dx, y: y + dy });
+      }
+    }
+    out.push({ type: 'goo', x, y, cells: laid });
+  } else if (['blast', 'bigblast', 'rocket', 'beam', 'toss', 'spike'].includes(leaves)) {
+    ev.special = { kind: leaves, x, y, w: cell.w || 1, h: cell.h || 1, what: def.what, count: def.count };
+    if (leaves === 'blast' || leaves === 'bigblast') ev.blast = true;
+  }
+  if (def.linked) {
+    // The ones joined to it in its row go too, one after the other.
+    for (const d of [-1, 1]) {
+      for (let nx = x + d; ; nx += d) {
+        const c = get(board, nx, y);
+        if (!isBlock(c) || c.kind !== cell.kind) break;
+        set(board, nx, y, EMPTY);
+        out.push({ type: 'block', x: nx, y, kind: cell.kind, hpLeft: 0, destroyed: true, by });
+        const lifted = liftFloor(board, nx, y);
+        if (lifted) out.push(lifted);
+      }
+    }
+  }
+  return out;
+}
+
+// A vine: every square that was hit loses a layer. One with none left is cut,
+// and everything beyond it (away from the pot) falls off. Cut at the pot, the
+// whole vine goes.
+function hitVine(board, cell, x, y, ev, touched) {
+  const out = [ev];
+  const seg = cell.seg.slice();
+  for (const t of touched) {
+    const i = t.x - x;
+    if (t.y === y && i >= 0 && i < seg.length && seg[i] > 0) seg[i] -= 1;
+  }
+  const cut = seg.indexOf(0);
+  if (cut < 0) {
+    set(board, x, y, { ...cell, seg });
+    return out;
+  }
+  ev.freed = [];
+  for (let i = cut; i < seg.length; i++) {
+    set(board, x + i, y, EMPTY);
+    ev.freed.push({ x: x + i, y });
+    const lifted = liftFloor(board, x + i, y);
+    if (lifted) out.push(lifted);
+  }
+  if (cut === 0) {
+    ev.hpLeft = 0;
+    ev.destroyed = true;
+  } else {
+    const left = { ...cell, w: cut, seg: seg.slice(0, cut) };
+    if (cut === 1) { delete left.w; delete left.h; }
+    set(board, x, y, left);
   }
   return out;
 }

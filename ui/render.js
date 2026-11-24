@@ -906,6 +906,7 @@ const BLOCKS = {
 const BIG_SIZE = {
   planter: [2, 2], dovecote: [2, 2], footlights: [2, 2],
   fireworks: [2, 1], truss: [3, 1], ticketbooth: [3, 1],
+  followspot: [2, 2], dressing: [2, 2], rolldrop: [2, 2], barrel: [1, 3],
 };
 
 // Mix two "#rrggbb" colors: t = 0 gives a, t = 1 gives b.
@@ -1448,10 +1449,112 @@ function drawBlock2(ctx, cell, cx, cy, size, theme, plain) {
   ctx.restore();
 }
 
+// THE SET PIECES (levels/sets.js). Draws one and returns true, or returns
+// false if this is not one of them.
+const SET_KINDS = new Set(Object.keys(OBSTACLES2).filter((k) => OBSTACLES2[k].set));
+function drawSet(ctx, cell, cx, cy, size, theme, plain) {
+  const kind = cell.kind;
+  const bar = kind === 'dryice' && cell.w > 1;
+  if (!bar && !SET_KINDS.has(kind)) return false;
+  const oc = theme.obstacleColors || {};
+  const def = OBSTACLES2[kind] || OBSTACLES[kind];
+  const s = size;
+  const w = cell.w || 1;
+  const h = cell.h || 1;
+  const left = cx - s / 2;
+  const top = cy - s / 2;
+  const tile = (name, i) => drawArt(ctx, name, cx + i * s, cy, s * 1.004, s);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  if (bar) {
+    for (let i = 0; i < w; i++) {
+      if (tile(i === 0 ? 'ice-cap' : i === w - 1 ? 'ice-end' : 'ice-mid', i)) continue;
+      box(ctx, left + i * s, top + s * 0.1, s, s * 0.8, s * 0.1, i ? '#4fd0ff' : '#e0246e', '#0a4a7a', 2);
+    }
+  } else if (kind === 'vine') {
+    const seg = cell.seg || [2];
+    for (let i = seg.length - 1; i >= 0; i--) {
+      if (tile(i === 0 ? 'vine-pot' + seg[0] : 'vine-' + seg[i], i)) continue;
+      box(ctx, left + i * s, top + s * 0.2, s, s * 0.6, s * 0.1, i ? (seg[i] > 1 ? '#ff5fa0' : '#2fc452') : '#e8843c', '#04431c', 2);
+    }
+  } else if (kind === 'rolldrop') {
+    // A painted cloth: evening sky over hills, rolled up from the bottom.
+    const W = (plain ? 2 : w) * s;
+    const H = (plain ? 2 : h) * s;
+    const g = ctx.createLinearGradient(0, top, 0, top + H);
+    g.addColorStop(0, '#6a2bd0');
+    g.addColorStop(0.6, '#ff5f9e');
+    g.addColorStop(1, '#ffb347');
+    roundRect(ctx, left + s * 0.05, top + s * 0.06, W - s * 0.1, H - s * 0.12, s * 0.12);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = '#3a0a5a';
+    ctx.lineWidth = Math.max(1.5, s * 0.06);
+    ctx.stroke();
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = '#fff3c4';
+    dot(ctx, left + W * 0.7, top + Math.min(H * 0.4, s * 0.9), s * 0.34);
+    ctx.fillStyle = '#4a1f8f';
+    for (const [x, r] of [[0.15, 0.9], [0.55, 1.1], [0.95, 0.8]]) dot(ctx, left + W * x, top + H + s * 0.45, s * r);
+    ctx.strokeStyle = 'rgba(40, 0, 70, 0.22)';
+    ctx.lineWidth = Math.max(1, s * 0.04);
+    for (let y = top + s / 2; y < top + H; y += s / 2) line(ctx, left, y, left + W, y);
+    ctx.restore();
+    box(ctx, left + s * 0.02, top + s * 0.02, W - s * 0.04, s * 0.2, s * 0.08, '#ffc42a', '#7a4a00', s * 0.04);
+    box(ctx, left + s * 0.02, top + H - s * 0.24, W - s * 0.04, s * 0.22, s * 0.1, '#e8eefc', '#3a0a5a', s * 0.04); // the roll
+  } else if (kind === 'goo') {
+    box(ctx, left - s * 0.01, top - s * 0.01, s * 1.02, s * 1.02, s * 0.12, '#ff9a24', null);
+    ctx.fillStyle = '#ffc163';
+    ctx.beginPath();
+    ctx.ellipse(cx - s * 0.12, cy - s * 0.2, s * 0.24, s * 0.1, -0.4, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#e87400';
+    dot(ctx, cx + s * 0.24, cy + s * 0.24, s * 0.07);
+    dot(ctx, cx - s * 0.2, cy + s * 0.28, s * 0.05);
+  } else if (kind === 'rope') {
+    box(ctx, left + s * 0.01, top + s * 0.01, s * 0.98, s * 0.98, s * 0.06, '#33204f', null);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
+    ctx.lineWidth = s * 0.06;
+    for (const d of [0.25, 0.5, 0.75]) line(ctx, left + s * d, top + s * 0.06, left + s * d, top + s * 0.94);
+    ctx.strokeStyle = '#ffc42a';
+    ctx.lineWidth = s * 0.09;
+    roundRect(ctx, left + s * 0.07, top + s * 0.07, s * 0.86, s * 0.86, s * 0.1);
+    ctx.setLineDash([s * 0.14, s * 0.07]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    const hp = plain ? def.hits.length || 1 : cell.hp;
+    const pw = plain ? (BIG_SIZE[kind] || [1, 1])[0] : w;
+    const ph = plain ? (BIG_SIZE[kind] || [1, 1])[1] : h;
+    const mx = cx + ((pw - 1) * s) / 2;
+    const my = cy + ((ph - 1) * s) / 2;
+    const name = [kind + '-' + hp, kind].find(hasArt);
+    if (!name || !drawArt(ctx, name, mx, my, pw * s, ph * s)) box(ctx, left + s * 0.06, top + s * 0.06, pw * s - s * 0.12, ph * s - s * 0.12, s * 0.14, '#8c95a6', oc.badge, 2);
+    if (!plain) {
+      ctx.translate(mx, my);
+      const a = (pw * s) / 2;
+      const b = (ph * s) / 2;
+      const u = s * 0.42;
+      if (def.hits[def.hits.length - hp] === 'power') powerMark(ctx, -a + 0.45 * u, -b + 0.45 * u, 0.38 * u, oc);
+      if (kind === 'barrel' && cell.charge > 0) {
+        ctx.fillStyle = '#3a1a04';
+        ctx.font = '800 ' + Math.round(s * 0.42) + 'px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(cell.charge), 0, s * 0.02);
+      } else if (hp > 1) hitBadge(ctx, a - 0.45 * u, b - 0.45 * u, 0.42 * u, hp, oc);
+    }
+  }
+  ctx.restore();
+  return true;
+}
+
 // Draw one obstacle centered at (cx, cy).
 // With plain = true it is drawn whole and new, with no badges and nothing
 // inside it (used for the small target pictures).
 function drawBlock(ctx, cell, cx, cy, size, theme, plain) {
+  if (drawSet(ctx, cell, cx, cy, size, theme, plain)) return;
   // Batch-2 kinds (and big blocks) have their own drawing routine.
   if (Object.hasOwn(BLOCKS2, cell.kind)) { drawBlock2(ctx, cell, cx, cy, size, theme, plain); return; }
   const oc = theme.obstacleColors || {};
@@ -1710,6 +1813,27 @@ export function drawTray(ctx, board, layout, theme, shade) {
       roundRect(ctx, originX + x * cell + gap, originY + y * cell + gap,
         cell - gap * 2, cell - gap * 2, cell * 0.14);
       ctx.fill();
+    }
+  }
+
+  // Prop belts.
+  for (const b of board.belts || []) {
+    const x0 = originX + b.x0 * cell;
+    const W = (b.x1 - b.x0 + 1) * cell;
+    const y0 = originY + b.y * cell;
+    box(ctx, x0, y0 + cell * 0.04, W, cell * 0.92, cell * 0.2, '#39435f', '#1a2036', Math.max(1.5, cell * 0.06));
+    ctx.strokeStyle = '#ffd04a';
+    ctx.lineWidth = cell * 0.07;
+    ctx.lineCap = 'round';
+    for (let x = b.x0; x <= b.x1; x++) {
+      const mx = originX + (x + 0.5) * cell;
+      const my = y0 + cell / 2;
+      const d = b.dir * cell * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(mx - d, my - cell * 0.22);
+      ctx.lineTo(mx + d, my);
+      ctx.lineTo(mx - d, my + cell * 0.22);
+      ctx.stroke();
     }
   }
 

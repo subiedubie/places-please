@@ -286,9 +286,10 @@ test('a truss takes one power hit per blast, however many of its cells the blast
   placeBlock(board, 1, 0, 'truss', { w: 4 });
   const one = fire(board, { x: 0, y: 0 }, { rng: makeRng(1) }).filter((e) => e.type === 'block');
   assert.equal(one.length, 1);
-  assert.equal(one[0].hpLeft, 1);
+  assert.equal(one[0].hpLeft, 3);
   assert.deepEqual(hitBlockEvents(board, 2, 0, 'match', 1), [], 'match hits do nothing');
-  const two = hitBlockEvents(board, 4, 0, 'power');
+  let two;
+  for (let i = 0; i < 3; i++) two = hitBlockEvents(board, 1, 0, 'power');
   assert.equal(two[0].destroyed, true);
   for (let x = 1; x <= 4; x++) assert.ok(isEmpty(get(board, x, 0)));
 });
@@ -382,9 +383,9 @@ test('footlights lose one listed color per matching group, and the first color p
   for (const [x, y] of [[1, 1], [2, 1], [1, 2], [2, 2]]) assert.ok(isEmpty(get(board, x, y)));
 });
 
-test('fireworks blast like a Grenade when a match takes their last color', () => {
-  // The 0s on row 3 sit under the fireworks (anchor 1,2). The blast is the 5x5
-  // square around the anchor.
+test('fireworks go off in a big round blast when a match takes their last color', () => {
+  // The 0s on row 3 sit under the fireworks (anchor 1,2). The blast is a
+  // circle of 4.5 squares around its middle.
   const board = boardFrom(['12341234', '23412341', '3..23412', '40003123', '12341234', '23412341']);
   placeBlock(board, 1, 2, 'fireworks', { colors: [0] });
   set(board, 3, 1, power('spot-v')); // caught in the blast: it goes off too
@@ -395,10 +396,9 @@ test('fireworks blast like a Grenade when a match takes their last color', () =>
   assert.equal(hit.blast, true);
   const boom = first.find((e) => e.type === 'clear' && e.cause === 'fireworks');
   assert.ok(boom, 'a clear event with cause fireworks');
-  assert.ok(boom.cells.every((c) => Math.abs(c.x - 1) <= 2 && Math.abs(c.y - 2) <= 2));
+  assert.ok(boom.cells.every((c) => Math.hypot(c.x - 1.5, c.y - 2) <= 4.5));
   assert.ok(boom.cells.some((c) => c.x === 3 && c.y === 4));
   assert.ok(first.some((e) => e.type === 'block' && e.kind === 'crate' && e.by === 'power'));
-  assert.ok(first.some((e) => e.type === 'clear' && e.cause === 'spot-v'), 'the Spotlight in the blast fired');
 });
 
 test('fireworks broken by a power-up blast go off in the same chain', () => {

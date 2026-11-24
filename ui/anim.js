@@ -174,13 +174,18 @@ export function splitSteps(events, before) {
     } else if (ev.type === 'fall' && Array.isArray(ev.falls)) step.falls.push(...ev.falls);
     else if (ev.type === 'refill' && Array.isArray(ev.spawns)) step.spawns.push(...ev.spawns);
     else if (ev.type === 'slide' && Array.isArray(ev.moves)) step.slides.push(...ev.moves);
-    else if ((ev.type === 'grow' || ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor' || ev.type === 'paint') && isPos(ev)) step.hits.push(ev);
+    else if ((ev.type === 'grow' || ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor' || ev.type === 'paint' || ev.type === 'goo') && isPos(ev)) step.hits.push(ev);
     else if (ev.type === 'fly' && isPos(ev.from) && isPos(ev.to)) step.flies.push(ev);
     else if (ev.type === 'transform' && Array.isArray(ev.cells)) {
       for (const c of ev.cells) {
         if (isPos(c) && c.was && typeof c.was.t === 'string' && typeof c.kind === 'string') step.flips.push(c);
       }
     } else if (ev.type === 'spawn-power' && isPos(ev.at) && typeof ev.kind === 'string') step.powers.push(ev);
+    else if (ev.type === 'roll') step.effects.push({ type: 'roller', x: ev.x, y: ev.y, h: ev.h, dir: ev.dir, p: 0, alpha: 1, slow: 7 });
+    else if (ev.type === 'beam') {
+      for (let i = 0; i < ev.h; i++) step.effects.push({ type: 'streak', x: ev.x, y: ev.y + i, dir: 'h', p: 0, alpha: 1, big: true, slow: 4 });
+      for (let i = 0; i < ev.w; i++) step.effects.push({ type: 'streak', x: ev.x + i, y: ev.y, dir: 'v', p: 0, alpha: 1, big: true, slow: 4 });
+    } else if (ev.type === 'act') step.act = true;
     else if (ev.type === 'swap') step.swapped = true;
     else if (ev.type === 'frame' && ev.board) {
       step.board = ev.board;
@@ -209,7 +214,7 @@ function takeArmed(armed, kind, test) {
 //   a combo        the same, bigger and brighter
 //   a plain match  nothing (the gems just pop)
 function effectsFor(cause, cells, armed) {
-  if (cause === 'match' || cause === 'under') return [];
+  if (cause === 'match' || cause === 'under' || cause === 'roll' || cause === 'beam') return [];
   const xs = cells.map((c) => c.x);
   const ys = cells.map((c) => c.y);
   const mid = {
@@ -314,6 +319,22 @@ function hitExtras(hits, before) {
       ghosts.push({ x: h.x, y: h.y, cell: { t: 'drop', kind: h.kind || 'sandbag' }, scale: 1 });
       continue;
     }
+    if (h.type === 'goo') {
+      for (const c of h.cells) {
+        flashes.push({ x: c.x, y: c.y, alpha: 1 });
+        emit('splash', { x: h.x, y: h.y }, c, 0xff9a24);
+      }
+      continue;
+    }
+    for (const p of h.rolled || []) flashes.push({ x: p.x, y: p.y, alpha: 1 });
+    if (h.freed) {
+      // Part of a bar or a vine came away.
+      for (const p of h.freed) {
+        flashes.push({ x: p.x, y: p.y, alpha: 1 });
+        ghosts.push({ x: p.x, y: p.y, cell: h.kind === 'vine' ? { t: 'block', kind: 'ivy', hp: 1 } : { t: 'block', kind: h.kind, hp: 1 }, scale: 1 });
+      }
+      if (!h.destroyed) continue;
+    }
     flashes.push({ x: h.x, y: h.y, alpha: 1 });
     if (h.destroyed) {
       let was = null;
@@ -348,6 +369,13 @@ function hitExtras(hits, before) {
 //      after another.
 async function playBurst(step, drawFrame, T) {
   const board = step.board;
+  if (step.act) {
+    // The curtain comes down, the scene changes, the curtain goes up.
+    emit('act');
+    await pause(620);
+    drawFrame(board);
+    return pause(620);
+  }
   const { flashes, ghosts } = hitExtras(step.hits, step.prev);
   const hide = new Set();   // cells of the new picture not to draw yet
   const sprites = [];       // every loose piece this step draws itself
@@ -396,6 +424,15 @@ async function playBurst(step, drawFrame, T) {
   // 1. The flights.
   if (step.flies.length) {
     const flyers = step.flies.map((f) => {
+      if (f.look) {
+        // Something an obstacle threw or shot.
+        if (f.lands) hide.add(key(f.to.x, f.to.y));
+        const far = Math.hypot(f.to.x - f.from.x, f.to.y - f.from.y);
+        return {
+          cell: { t: 'drop', kind: f.look === 'giftbox' ? 'giftbox-2' : f.look }, bare: true, from: f.from, to: f.to, look: f.look,
+          lift: f.look === 'spike' ? 0.4 : Math.min(2.2, 0.8 + far * 0.3), x: f.from.x, y: f.from.y, scale: 1, rot: 0,
+        };
+      }
       // If the target cell now holds a power-up, that is what was carried.
       const cells = board.cells;
       const there = Array.isArray(cells) && isNum(board.cols) ? cells[f.to.y * board.cols + f.to.x] : null;
@@ -413,12 +450,16 @@ async function playBurst(step, drawFrame, T) {
     });
     for (const p of pops) if (p.gone) p.scale = 0;
     sprites.push(...flyers);
-    await tween(T.fly, (t) => {
+    await tween(T.fly * (step.flies.some((f) => f.look) ? 1.7 : 1), (t) => {
       const e = t * t * (3 - 2 * t); // gentle start and finish
       for (const s of flyers) {
         s.x = s.from.x + (s.to.x - s.from.x) * e;
         s.y = s.from.y + (s.to.y - s.from.y) * e - Math.sin(Math.PI * e) * s.lift; // the arc
         s.rot = e * Math.PI * 4;                                                   // two full turns
+        if (s.look === 'rocket') {
+          // Nose first along the arc.
+          s.rot = Math.atan2(s.to.y - s.from.y - Math.cos(Math.PI * e) * Math.PI * s.lift, s.to.x - s.from.x) + Math.PI / 2;
+        } else if (s.look === 'giftbox') s.rot = Math.sin(e * Math.PI * 3) * 0.4;
         s.scale = 1.1 + 0.45 * Math.sin(Math.PI * e);
         emit('trail', s.x, s.y);
       }
@@ -432,7 +473,7 @@ async function playBurst(step, drawFrame, T) {
 
   // 2. The streaks, rings and beams shoot out.
   if (fx.length) {
-    await tween(T.fx, (t) => {
+    await tween(T.fx * Math.max(1, ...fx.map((f) => f.slow || 1)), (t) => {
       for (const f of fx) {
         f.p = 1 - (1 - t) * (1 - t); // fast at first, then easing off
         f.alpha = 1;
@@ -539,7 +580,7 @@ async function playFall(step, drawFrame, T, early, swapMs, live) {
     starts.set(toKey, { dx: from.x - tx + (up ? up.dx : 0), dy: from.y - ty + (up ? up.dy : 0) });
   }
 
-  for (const m of step.slides) starts.set(key(m.to.x, m.to.y), { dx: m.from.x - m.to.x, dy: m.from.y - m.to.y, slide: true });
+  for (const m of step.slides) starts.set(key(m.to.x, m.to.y), { dx: m.wrap ? -m.wrap : m.from.x - m.to.x, dy: m.from.y - m.to.y, slide: true });
 
   if (starts.size === 0 && ghosts.length === 0 && flashes.length === 0) {
     drawFrame(board);

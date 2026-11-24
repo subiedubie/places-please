@@ -20,7 +20,7 @@ export const OBSTACLES = {
   hatbox:    { name: 'Hatbox',      hits: ['any', 'any'] },             // like the Vase: two
   trunk:     { name: 'Trunk',       hits: ['any', 'any', 'any'] },      // like the Oyster: three
   paint:     { name: 'Paint Can',   hits: ['color'] },                  // like the Color Box: a match of its own color
-  dryice:    { name: 'Dry Ice',     hits: ['any'] },                    // like Ice
+  dryice:    { name: 'Dry Ice',     size: [1, 1], hits: ['any'], retract: true }, // a bar: every match beside it melts one square off its end
   cashbox:   { name: 'Cash Box',    hits: ['power'] },                  // like the Porcelain Piggy: power-ups only
   flat:      { name: 'Scenery Flat', hits: ['power', 'power', 'power'] }, // like Stone: three power-up hits
   strongbox: { name: 'Strongbox',   hits: ['power', 'match'] },         // like the Rock: a power-up, then a match
@@ -53,6 +53,18 @@ export const FLOORS = {
 //   colorList  how many colors it starts with; each must be matched next to it
 //   toggles    true = opens and closes after every move; only hit while open
 //   curtain    true = takes no hits; opens when enough of its color is cleared
+// Batch 3 (23 Nov. 2026):
+//   retract    a bar: every hit takes one square off its far end
+//   vine       a bar of segments; each loses its flowers, then is cut, and
+//              everything beyond the cut falls off with it
+//   roll       covers an area; every hit rolls it up by one row, and the row it
+//              leaves holds Crates
+//   linked     when one breaks, every one of them joined to it in the row does
+//   leaves     also: 'bigblast', 'rocket' (flies at something needed), 'beam'
+//              (clears its rows and columns), 'toss' (throws `count` of `what`
+//              onto gems), 'goo' (covers the 3x3 around it), 'spike' (flies to
+//              the nearest Barrel)
+//   charge     takes no hits; after that many spikes it rolls across the board
 const M5 = ['match', 'match', 'match', 'match', 'match'];
 export const OBSTACLES2 = {
   planter:     { name: 'Planter',        size: [2, 2], hits: M5, leaves: 'confetti' },            // like the Bush
@@ -62,14 +74,28 @@ export const OBSTACLES2 = {
   candyjar:    { name: 'Candy Jar',      size: [1, 1], hits: ['any', 'any', 'any'], product: 'candy' },           // like the Jar
   dovecote:    { name: 'Dovecote',       size: [2, 2], hits: M5, leaves: 'doves' },               // like the Birdhouse: doves fall out
   footlights:  { name: 'Footlights',     size: [2, 2], hits: [], colorList: 4 },                  // like the Light Bulb
-  fireworks:   { name: 'Fireworks',      size: [2, 1], hits: [], colorList: 3, leaves: 'blast' }, // like the Dynamite Box
-  truss:       { name: 'Lighting Truss', size: [3, 1], hits: ['power', 'power'] },                // like the Metal Tube
+  fireworks:   { name: 'Fireworks',      size: [2, 1], hits: [], colorList: 3, leaves: 'bigblast' }, // a huge round blast
+  truss:       { name: 'Lighting Truss', size: [3, 1], hits: ['power'], retract: true },                // a bar: every power-up takes one square off
   ticketbooth: { name: 'Ticket Booth',   size: [3, 1], hits: ['power', 'match', 'match', 'match'], leaves: 'power' }, // like the Slot Machine
   makeupcase:  { name: 'Makeup Case',    size: [1, 1], hits: ['match'], toggles: true },          // like the Bow Tie box
   // Twists (config/twists.js): they act by themselves; see engine/twists.js.
   ivy:         { name: 'Creeping Ivy',   size: [1, 1], hits: ['any'], twist: true },
   mouse:       { name: 'Stage Mouse',    size: [1, 1], hits: ['any'], twist: true },
   paintkeg:    { name: 'Paint Keg',      size: [1, 1], hits: ['any', 'any', 'any'], leaves: 'paint', twist: true }, // bursts and splashes paint
+  // Batch 3: they come on the set pieces (levels/sets.js).
+  vine:        { name: 'Rose Vine',      size: [6, 1], hits: ['any'], vine: true, set: true },
+  rolldrop:    { name: 'Painted Drop',   size: [4, 4], hits: ['any'], roll: true, set: true },
+  fusebox:     { name: 'Fuse Box',       size: [1, 1], hits: ['power', 'power'], linked: true, set: true },
+  rigbag:      { name: 'Tool Bag',       size: [1, 1], hits: ['any', 'any'], leaves: 'spike', set: true },
+  barrel:      { name: 'Barrel',         size: [1, 3], hits: [], charge: 3, set: true },
+  followspot:  { name: 'Follow Spot',    size: [2, 2], hits: ['power', 'any', 'any', 'any'], leaves: 'beam', set: true },
+  dressing:    { name: 'Dressing Room',  size: [2, 2], hits: ['any', 'any', 'any', 'any'], leaves: 'toss', what: 'giftbox', count: 3, set: true },
+  giftbox:     { name: 'Fan Gift',       size: [1, 1], hits: ['any', 'any'], set: true },
+  greasepot:   { name: 'Greasepaint',    size: [1, 1], hits: ['any', 'any'], leaves: 'goo', set: true },
+  goo:         { name: 'Spilled Paint',  size: [1, 1], hits: ['any'], set: true },
+  propcase:    { name: 'Prop Case',      size: [1, 1], hits: ['any', 'any'], set: true },
+  rope:        { name: 'Backstage',      size: [1, 1], hits: ['any'], set: true },
+  cannon:      { name: 'Streamer Cannon', size: [1, 1], hits: ['any', 'any'], leaves: 'rocket', set: true },
   curtain:     { name: 'Curtain',        size: [1, 1], hits: [], curtain: true },                 // like the Curtain
 };
 

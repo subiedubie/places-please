@@ -8,7 +8,7 @@ import {
   get, set, cloneBoard, piece, power, EMPTY,
   isEmpty, isHole, isFixed, isDrop, isMovable, isPiece, hitBlockEvents, anchorOf, liftFloor, floorAt, setFloor, spreadPaint,
 } from './board.js';
-import { blast } from './powers.js';
+import { blast, special } from './powers.js';
 import { findGroups, powerForShape } from './matches.js';
 
 // ---- Falling ----------------------------------------------------------------
@@ -219,6 +219,19 @@ export function dropAndFill(board, ctx, events, always) {
 function hitNeighbours(board, group, ctx) {
   const done = new Set();
   const out = [];
+  const specials = [];
+  // Which cells of each block the group touches.
+  const touched = new Map();
+  for (const c of group.cells) {
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const at = anchorOf(board, c.x + dx, c.y + dy);
+      if (!at) continue;
+      const k = `${at.x},${at.y}`;
+      if (!touched.has(k)) touched.set(k, []);
+      const list = touched.get(k);
+      if (!list.some((t) => t.x === c.x + dx && t.y === c.y + dy)) list.push({ x: c.x + dx, y: c.y + dy });
+    }
+  }
   for (const c of group.cells) {
     for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
       // A part of a big block stands for the whole block (its anchor), so a
@@ -226,16 +239,15 @@ function hitNeighbours(board, group, ctx) {
       const at = anchorOf(board, c.x + dx, c.y + dy);
       if (!at) continue;
       const key = `${at.x},${at.y}`;
-      if (done.has(key)) continue;
+      if (done.has(key) || !touched.has(key)) continue; // (a block that has only just appeared is not hit)
       done.add(key);
-      const hits = hitBlockEvents(board, at.x, at.y, 'match', group.color, ctx.rng);
+      const hits = hitBlockEvents(board, at.x, at.y, 'match', group.color, ctx.rng, touched.get(key));
       out.push(...hits);
-      // Fireworks that just broke go off like a Grenade, centred on the anchor.
-      if (hits.length > 0 && hits[0].blast) {
-        out.push(...blast(board, { x: at.x, y: at.y }, { rng: ctx.rng, needs: ctx.needs }));
-      }
+      // Fireworks, cannons and the like that just broke go off.
+      if (hits.length > 0 && hits[0].special) specials.push(hits[0].special);
     }
   }
+  if (specials.length) out.push(...special(board, specials, { rng: ctx.rng, needs: ctx.needs }));
   return out;
 }
 

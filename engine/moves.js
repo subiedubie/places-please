@@ -5,7 +5,7 @@
 // it). When the board has no legal move, reshuffle() rearranges the pieces so
 // the player is never stuck.
 
-import { get, set, piece, isPiece, isPower } from './board.js';
+import { get, set, piece, isPiece, isPower, isDrop } from './board.js';
 import { findGroups } from './matches.js';
 
 // Tuning numbers for reshuffle (kept here, at the top, so they are easy to find).
@@ -14,10 +14,10 @@ const REPAIR_ROUNDS = 40; // per try: rounds of breaking up accidental matches
 const REBUILD_TRIES = 5000; // safety stop for the from-scratch rebuild
 const MIN_REBUILD_COLORS = 4; // the rebuild uses at least this many colors
 
-// Can this cell be swapped? Only ordinary pieces and power-ups can. Holes,
-// empty cells, obstacles (blocks) and the dropper never can.
+// Can this cell be swapped? Pieces, power-ups and things that fall (sandbags,
+// doves, tortoises) can. Holes, empty cells and obstacles (blocks) never can.
 function swappable(cell) {
-  return isPiece(cell) || isPower(cell);
+  return isPiece(cell) || isPower(cell) || isDrop(cell);
 }
 
 // Would swapping cells a and b make a match that includes a or b?
@@ -50,6 +50,7 @@ function scanMoves(board, firstOnly) {
         if (!swappable(cb)) continue;
         let legal;
         if (isPower(ca) || isPower(cb)) legal = true; // power-up swaps always count
+        else if (isDrop(ca) && isDrop(cb)) legal = false;
         else if (ca.color === cb.color) legal = false; // swapping twins changes nothing
         else legal = swapMakesGroup(board, a, b);
         if (legal) {

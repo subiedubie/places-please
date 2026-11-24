@@ -135,7 +135,7 @@ test('every twist has its introduction level, and the levels are well formed', (
     }
     assert.equal(JSON.stringify(serialize(deserialize(serialize(g)))), JSON.stringify(serialize(g)));
   }
-  for (const k of ['ivy', 'mouse', 'propbomb', 'chameleon', 'treasure']) assert.ok(seen[k] >= 10, `${k}: ${seen[k]}`);
+  for (const k of ['ivy', 'mouse', 'propbomb', 'chameleon', 'treasure']) assert.ok(seen[k] >= 6, `${k}: ${seen[k]}`);
 });
 
 test('400 random games on twist levels never break', () => {

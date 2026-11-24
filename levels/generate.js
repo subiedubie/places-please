@@ -1,6 +1,8 @@
 // Builds level number n. The result depends only on n and config/curve.js,
 // so level 37 is the same level every time, on every device.
 import { addTwists } from './twists.js';
+import { setFor, buildSet, FACTOR } from './sets.js';
+import { TWISTS } from '../config/twists.js';
 import { makeRng } from '../engine/rng.js';
 import { CURVE } from '../config/curve.js';
 import * as OB from '../config/obstacles.js';
@@ -60,6 +62,7 @@ function introConfig(curve, ready) {
 export function blockSize(b, curve = CURVE) {
   const b2 = curve.obstacles.batch2 || {};
   if (b.kind === 'truss') return [b.w || b2.truss.minWidth, 1];
+  if (b.w || b.h) return [b.w || 1, b.h || 1];
   const given = OB.OBSTACLES2 && OB.OBSTACLES2[b.kind] ? OB.OBSTACLES2[b.kind].size : undefined;
   if (Array.isArray(given) && given.length === 2 && given.every(Number.isInteger)) return [given[0], given[1]];
   if (given && Number.isInteger(given.w) && Number.isInteger(given.h)) return [given.w, given.h];
@@ -469,6 +472,19 @@ function buildObstacles(n, tier, cols, rows, holes, colors, kindLimit, targetLim
   return { blocks, drops, floor, rng };
 }
 
+// Dry Ice side by side in a row is one bar.
+function joinIce(blocks) {
+  const out = [];
+  const ice = blocks.filter((b) => b.kind === 'dryice').sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const b of blocks) if (b.kind !== 'dryice') out.push(b);
+  for (const b of ice) {
+    const last = out[out.length - 1];
+    if (last && last.kind === 'dryice' && last.y === b.y && last.x + (last.w || 1) === b.x) last.w = (last.w || 1) + 1;
+    else out.push({ ...b });
+  }
+  return out;
+}
+
 // The obstacle targets of a level, in the order the kinds were introduced.
 // Batch 1: clear ALL of every kind on the board (blocks held inside padlocks
 // count too). Batch 2: see docs/OBSTACLES2.md and the comments below.
@@ -518,13 +534,13 @@ function movesFor(tier, blocks, drops, floor, targets, curve) {
   const curtainNeed = {}; // color -> pieces needed (counted once per color)
   for (const b of blocks) {
     if (OBSTACLES[b.kind]) {
-      addHits(b.kind);
+      for (let i = 0; i < (b.w || 1); i++) addHits(b.kind);
       if (b.inside && b.inside.t === 'block') addHits(b.inside.kind);
     } else if (b.kind === 'bouquet') extra += 2 * e.perMatchHit;
     else if (b.kind === 'candyjar') extra += b2.candyPerJar * e.perMatchHit;
     else if (b.kind === 'planter' || b.kind === 'dovecote') extra += b2.bigHits[b.kind] * e.perBigHit;
     else if (b.colors) extra += b.colors.length * e.perListColor;
-    else if (b.kind === 'truss') extra += 2 * e.perPowerHit;
+    else if (b.kind === 'truss') extra += 0.8 * (b.w || 3) * e.perPowerHit;
     else if (b.kind === 'ticketbooth') extra += e.perPowerHit + 3 * e.perMatchHit;
     else if (b.kind === 'makeupcase') extra += e.perMakeupCase;
     else if (b.kind === 'curtain') curtainNeed[b.color] = b.need;
@@ -545,10 +561,13 @@ function movesFor(tier, blocks, drops, floor, targets, curve) {
 // options.ready: the batch-2 kinds to use (for tests; a level made that way has
 // no twists unless options.twists is true).
 export function generateLevel(n, curve = CURVE, options = {}) {
-  const level = plainLevel(n, curve, options);
+  // A set piece has the level to itself (not on one that introduces something).
+  const taken = (m) => Object.values(introLevels(curve)).includes(m) || Object.values(TWISTS.intro).includes(m);
+  const name = options.ready || options.noSets ? null : setFor(n, taken);
+  const level = name ? null : plainLevel(n, curve, options);
   if (options.ready && !options.twists) return level;
-  const L = addTwists(level);
-  const k = (curve.movesFactor || [])[L.tier];
+  const L = name ? buildSet(name, n, tierFor(n, curve)) : addTwists(level);
+  const k = (name ? FACTOR : curve.movesFactor || [])[L.tier];
   return k && k !== 1 && !L.bonus ? { ...L, moves: Math.max(12, Math.round(L.moves * k)) } : L;
 }
 
@@ -587,6 +606,7 @@ function plainLevel(n, curve, options) {
     ({ blocks, drops, floor, rng: obstacleRng } = buildObstacles(
       n, tier, cols, rows, holes, colors, kindLimit, targetLimit, curve, ready,
     ));
+    blocks = joinIce(blocks);
   }
 
   const targets = [];

@@ -58,10 +58,11 @@ function placeObstacles(board, level, rng) {
     if (b.kind === 'padlock' && !inside && isPiece(there)) inside = there;
     const extra = { color: b.color, inside };
     const def = OBSTACLES2[b.kind];
+    if (b.w) extra.w = b.w;
+    if (b.h) extra.h = b.h;
     if (def) {
       // Batch-2 extras: a truss's width, a color list, a curtain's count,
       // whether a makeup case starts open.
-      extra.w = b.w;
       extra.need = b.need;
       extra.open = b.open;
       extra.colors = b.colors;
@@ -103,6 +104,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
   if (findGroups(board).length > 0 || !hasLegalMove(board)) reshuffle(board, setupRng);
 
   placeTwists(board, level);
+  if (level.belts) board.belts = level.belts.map((b) => ({ ...b }));
   if (level.paint) board.paint = new Array(board.cells.length).fill(0);
 
   // Each gift replaces one ordinary piece, chosen at random. Replacing a piece
@@ -141,6 +143,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
     },
     attemptSeed,
     moveCount: 0,
+    act: 0,                     // which board of a level with several (level.acts)
     history: {},                // room for later drop rules (retries, streaks, purchases)
     superPrism: !!options.superPrism, // Magic Balls have double effect this level
   };
@@ -182,6 +185,10 @@ export function stillNeeded(game) {
   const blockNeeded = (cell) => {
     if (open(cell.kind)) return true;
     if (cell.kind === 'dovecote' && open('dove')) return true;
+    if (cell.kind === 'dressing' && open('giftbox')) return true;
+    if (cell.kind === 'greasepot' && open('goo')) return true;
+    if (cell.kind === 'rigbag' && open('barrel')) return true;
+    if (cell.kind === 'rolldrop' && open('crate')) return true;
     if (cell.kind === 'paintkeg' && open('paint_floor')) return true;
     const def = obstacleDef(cell.kind);
     if (def.product && !def.generator && open(def.product)) return true;
@@ -335,9 +342,10 @@ export function applyMove(game, action) {
     const { a, b } = action;
     if (!a || !b || !adjacent(a, b)) return null;
     const ca = get(board, a.x, a.y), cb = get(board, b.x, b.y);
-    // Only pieces and power-ups can be swapped: not holes, empty cells,
-    // obstacles or droppers.
-    if (!(isPiece(ca) || isPower(ca)) || !(isPiece(cb) || isPower(cb))) return null;
+    // Pieces, power-ups and things that fall can be swapped: not holes, empty
+    // cells or obstacles.
+    const loose = (c) => isPiece(c) || isPower(c) || isDrop(c);
+    if (!loose(ca) || !loose(cb) || (isDrop(ca) && isDrop(cb))) return null;
 
     if (isPower(ca) && isPower(cb)) {
       // Two power-ups together: the bigger combined effect, centred on b.
@@ -373,6 +381,28 @@ export function applyMove(game, action) {
   game.movesLeft -= 1;
   game.moveCount += 1;
   return { events, origins };
+}
+
+// Bring on the next board of a level with acts. Moves carry over, and so do
+// the power-ups that were made.
+function nextAct(game) {
+  const { level, board } = game;
+  const act = level.acts[game.act];
+  const rng = game._rng;
+  const kept = board.cells.filter(isPower);
+  game.act += 1;
+  const fresh = createBoard(board.cols, board.rows, act.holes || level.holes);
+  fillStart(fresh, level.colors, rng);
+  placeObstacles(fresh, { ...level, ...act }, rng);
+  if (findGroups(fresh).length > 0 || !hasLegalMove(fresh)) reshuffle(fresh, rng);
+  const spots = [];
+  fresh.cells.forEach((c, i) => { if (isPiece(c)) spots.push(i); });
+  for (const p of kept) if (spots.length) fresh.cells[spots.splice(rng.int(spots.length), 1)[0]] = p;
+  board.cells = fresh.cells;
+  board.floor = fresh.floor;
+  game.targets = act.targets.map((t) => ({ ...t, have: 0 }));
+  syncTargets(game);
+  return [{ type: 'act', n: game.act }, { type: 'frame', board: cloneBoard(board) }];
 }
 
 export const targetsMet = (game) => game.targets.every((t) => t.have >= t.need);
@@ -430,6 +460,12 @@ export function* finishSteps(game, origins = []) {
     // What was behind them may fall or match, so the board settles again.
     const opened = openCurtains(game);
     if (opened.length === 0) {
+      if (targetsMet(game) && game.act < (game.level.acts || []).length) {
+        // The next act: a new board, with its own targets.
+        yield { events: nextAct(game), landed: false };
+        turned = true;
+        continue;
+      }
       if (turned || targetsMet(game)) break;
       turned = true;
       const acted = takeTurn(game);
@@ -480,8 +516,10 @@ export function serialize(game) {
       ...(game.board.revolves ? { revolves: game.board.revolves } : {}),
       ...(game.board.hidden ? { hidden: game.board.hidden } : {}),
       ...(game.board.paint ? { paint: game.board.paint } : {}),
+      ...(game.board.belts ? { belts: game.board.belts } : {}),
     },
     movesLeft: game.movesLeft,
+    act: game.act || 0,
     targets: game.targets,
     status: game.status,
     tally: game.tally,
@@ -499,7 +537,8 @@ export function deserialize(data, dropRule = DROP_RULES.D1) {
   const game = {
     level: d.level,
     // An old save has no floor layer: that reads as no floor anywhere.
-    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}), ...(d.board.paint ? { paint: d.board.paint } : {}) },
+    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}), ...(d.board.paint ? { paint: d.board.paint } : {}), ...(d.board.belts ? { belts: d.board.belts } : {}) },
+    act: d.act || 0,
     movesLeft: d.movesLeft,
     targets: d.targets,
     status: d.status,

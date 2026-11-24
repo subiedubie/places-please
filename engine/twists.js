@@ -125,6 +125,21 @@ export function takeTurn(game) {
   }
   if (turns.length) events.push({ type: 'slide', moves: turns }, { type: 'frame', board: cloneBoard(board) });
 
+  // Prop belts move everything on them one square along, round and round.
+  const along = [];
+  for (const b of board.belts || []) {
+    const row = [];
+    for (let x = b.x0; x <= b.x1; x++) row.push(get(board, x, b.y));
+    if (row.some((c) => c === null || c.t === 'part' || (c.w || 1) > 1 || (c.h || 1) > 1)) continue;
+    const n = row.length;
+    row.forEach((c, i) => {
+      const j = (i + b.dir + n) % n;
+      set(board, b.x0 + j, b.y, c);
+      if (c.t !== 'empty') along.push({ from: { x: b.x0 + i, y: b.y }, to: { x: b.x0 + j, y: b.y }, ...(Math.abs(j - i) > 1 ? { wrap: b.dir } : {}) });
+    });
+  }
+  if (along.length) events.push({ type: 'slide', moves: along }, { type: 'frame', board: cloneBoard(board) });
+
   syncTargets(game);
   return events;
 }
@@ -140,5 +155,8 @@ export function syncTargets(game) {
     const lying = (game.board.floor || []).filter((f) => f === 'petals').length;
     p.need = p.have + lying + (tor ? tor.need - tor.have : 0) * game.board.rows;
   }
+  // Spilled paint: what lies there now, and nine squares for each pot to come.
+  const g = game.targets.find((x) => x.block === 'goo');
+  if (g) g.need = g.have + countKind(game.board, 'goo') + 9 * countKind(game.board, 'greasepot');
   // (A fizzled bomb may leave crates; they count only if the level asks for crates.)
 }

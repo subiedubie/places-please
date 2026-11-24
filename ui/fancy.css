@@ -269,3 +269,13 @@ html, body { position: fixed; inset: 0; width: 100%; }
 .home-mid .level-card .label:empty, #hud-tier:empty { display: none; }
 
 #home-show .show-time { margin-top: 0; }
+
+/* Between the acts of a level. */
+.act-curtain { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; display: grid; place-items: center; }
+.act-curtain i { position: absolute; top: 0; bottom: 0; width: 51%; animation: act-close 1.4s ease-in-out both;
+  background: repeating-linear-gradient(90deg, #a80f3c 0 14px, #d6285c 14px 26px, #7a0a2c 26px 34px); border-bottom: 10px solid #ffc42a; }
+.act-curtain i:first-child { left: 0; --away: -102%; }
+.act-curtain i:nth-child(2) { right: 0; --away: 102%; }
+.act-curtain b { position: relative; font: 44px Limelight, Georgia, serif; color: #ffe9a8; text-shadow: 0 3px 0 #4a0418; animation: act-name 1.4s both; }
+@keyframes act-close { 0%, 100% { transform: translateX(var(--away)); } 38%, 62% { transform: none; } }
+@keyframes act-name { 0%, 30%, 72%, 100% { opacity: 0; } 42%, 60% { opacity: 1; } }

@@ -326,6 +326,15 @@ function rememberTargets() {
   shownTargets = session.game.targets.map((t) => ({ ...t }));
 }
 
+// Between the acts of a level a curtain closes and opens again.
+fx.act = () => {
+  const el = document.createElement('div');
+  el.className = 'act-curtain';
+  el.innerHTML = '<i></i><i></i><b>Act two</b>';
+  canvas.parentElement.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+};
+
 // Something the level still wants was just collected at cell (x, y): it flies
 // up to its count at the top of the screen.
 fx.collect = (x, y, cell) => {

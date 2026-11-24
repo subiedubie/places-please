@@ -33,6 +33,7 @@
 //   - Random choices use only opts.rng (never Math.random).
 
 import {
+  block,
   EMPTY, get, set, inBounds, cloneBoard, isPiece, isPower, power,
   isBlock, isPart, isDrop, hitBlockEvents, takesHit, anchorOf, footprint, liftFloor, isPainted, spreadPaint,
 } from './board.js';
@@ -90,13 +91,18 @@ function clearArea(run, coords, cause, chain = true, carry = false) {
       // whatever it turns into.
       const at = anchorOf(board, x, y);
       if (!at) continue;
-      for (const p of footprint(at.cell, at.x, at.y)) run.hitNow.add(keyOf(p.x, p.y));
-      const hits = hitBlockEvents(board, at.x, at.y, 'power', undefined, run.opts.rng);
+      const foot = footprint(at.cell, at.x, at.y);
+      for (const p of foot) run.hitNow.add(keyOf(p.x, p.y));
+      const touched = foot.filter((p) => coords.some((q) => q.x === p.x && q.y === p.y));
+      const hits = hitBlockEvents(board, at.x, at.y, 'power', undefined, run.opts.rng, touched);
       blockHits.push(...hits);
-      // Fireworks that just broke go off like a Grenade, in their turn.
-      if (hits.length > 0 && hits[0].blast) {
-        run.queue.push({ x: at.x, y: at.y, kind: 'show', cause: 'fireworks' });
+      for (const h of hits) {
+        // What it leaves behind is not hit by this same effect.
+        if (h.type === 'goo') for (const p of h.cells) run.hitNow.add(keyOf(p.x, p.y));
+        if (h.type === 'block') run.hitNow.add(keyOf(h.x, h.y));
       }
+      // Fireworks, cannons and the like that just broke go off, in their turn.
+      if (hits.length > 0 && hits[0].special) run.queue.push({ ...hits[0].special, special: true });
       continue;
     }
     if (run.cleared.has(key)) {
@@ -306,7 +312,9 @@ function runPower(run, item) {
   const { board } = run;
   run.hitNow = new Set(); // a new effect: every block may be hit once more
   const { x, y, kind } = item;
-  if (kind === 'spot-h') {
+  if (item.special) {
+    runSpecial(run, item);
+  } else if (kind === 'spot-h') {
     clearArea(run, rowCells(board, y), kind);
   } else if (kind === 'spot-v') {
     clearArea(run, colCells(board, x), kind);
@@ -329,7 +337,76 @@ function runPower(run, item) {
       if (second !== undefined) clearArea(run, colorCells(board, second), kind);
     }
   }
+  // (Several spikes or rockets fly at the same time.)
+  const next = run.queue[0];
+  if (item.special && next && next.special && next.kind === kind && (kind === 'spike' || kind === 'rocket')) return;
   pushFrame(run);
+}
+
+// What an obstacle sets off when it breaks (`leaves` in config/obstacles.js).
+function runSpecial(run, item) {
+  const { board, opts } = run;
+  const { x, y, w, h, kind } = item;
+  const rng = opts.rng;
+  if (kind === 'blast') {
+    clearArea(run, squareCells(x, y, 2), 'fireworks');
+  } else if (kind === 'bigblast') {
+    // A round blast, four and a half squares in every direction.
+    const cx = x + (w - 1) / 2;
+    clearArea(run, allCells(board).filter((p) => Math.hypot(p.x - cx, p.y - y) <= 4.5), 'fireworks');
+  } else if (kind === 'rocket') {
+    const to = flyAndClear(run, { x, y }, 'rocket');
+    if (to) [...run.events].reverse().find((e) => e.type === 'fly').look = 'rocket';
+  } else if (kind === 'beam') {
+    // Its rows and its columns, all the way across.
+    const area = [];
+    for (let i = 0; i < h; i++) area.push(...rowCells(board, y + i));
+    for (let i = 0; i < w; i++) area.push(...colCells(board, x + i));
+    run.events.push({ type: 'beam', x, y, w, h });
+    clearArea(run, area, 'beam');
+  } else if (kind === 'toss') {
+    const free = allCells(board).filter((p) => {
+      const c = get(board, p.x, p.y);
+      return isPiece(c) && c.fuse === undefined && !c.mimic && !run.cleared.has(keyOf(p.x, p.y));
+    });
+    for (let i = 0; i < item.count && free.length; i++) {
+      const p = free.splice(rng ? rng.int(free.length) : 0, 1)[0];
+      set(board, p.x, p.y, block(item.what));
+      run.events.push({ type: 'fly', from: { x: x + 0.5, y: y + 0.5 }, to: p, look: item.what, lands: true });
+    }
+  } else if (kind === 'spike') {
+    const barrels = allCells(board).filter((p) => {
+      const c = get(board, p.x, p.y);
+      return isBlock(c) && c.charge > 0;
+    });
+    barrels.sort((a, b) => Math.hypot(a.x - x, a.y + 1 - y) - Math.hypot(b.x - x, b.y + 1 - y));
+    const at = barrels[0];
+    if (at) {
+      const c = get(board, at.x, at.y);
+      const charge = c.charge - 1;
+      set(board, at.x, at.y, { ...c, charge });
+      run.events.push({ type: 'fly', from: { x, y }, to: { x: at.x, y: at.y + 1 }, look: 'spike' });
+      if (charge === 0) run.queue.push({ special: true, kind: 'roll', x: at.x, y: at.y, w: 1, h: c.h || 1 });
+    }
+  } else if (kind === 'roll') {
+    // The barrel rolls across the board: everything in its rows is hit twice.
+    const c = get(board, x, y);
+    if (!isBlock(c)) return;
+    for (const p of footprint(c, x, y)) set(board, p.x, p.y, EMPTY);
+    run.events.push({ type: 'roll', x, y, h, dir: x < board.cols / 2 ? 1 : -1 });
+    run.events.push({ type: 'block', x, y, kind: c.kind, hpLeft: 0, destroyed: true, by: 'power', w: 1, h });
+    const area = [];
+    for (let i = 0; i < h; i++) area.push(...rowCells(board, y + i));
+    for (let i = 0; i < 2; i++) { run.hitNow = new Set(); clearArea(run, area, 'roll'); }
+  }
+}
+
+// Set off what an obstacle left behind. Changes the board; returns the events.
+export function special(board, items, opts = {}) {
+  const run = startRun(board, opts);
+  for (const item of [].concat(items)) run.queue.push({ ...item, special: true });
+  drain(run);
+  return run.events;
 }
 
 // Work through the queue until it is empty. A power-up reached by a blast is

@@ -54,7 +54,7 @@ function checkBoard(game, holes, label) {
         assert.ok(def, `${label}: unknown block kind`);
         // Generators, color-list blocks and curtains have no hit list; their
         // hp only has to be at least 1.
-        const most = def.hits.length || (cell.colors ? cell.colors.length : 1);
+        const most = def.retract || def.roll || def.vine ? 10 : def.hits.length || (cell.colors ? cell.colors.length : 1);
         assert.ok(cell.hp >= 1 && cell.hp <= most, `${label}: bad hp at ${x},${y}`);
         // Every other cell of a big block must be a part pointing back at it.
         for (const p of footprint(cell, x, y)) {
@@ -283,7 +283,7 @@ test('150 random games on batch-2 levels never break the board', () => {
   assert.ok(seen.toggles > 0, 'makeup cases flipped');
   assert.ok(seen.opened > 0, 'curtains opened');
   for (const kind of Object.keys(OBSTACLES2)) {
-    if (OBSTACLES2[kind].generator || OBSTACLES2[kind].twist) continue; // generators never break; twists have their own tests
+    if (OBSTACLES2[kind].generator || OBSTACLES2[kind].twist || OBSTACLES2[kind].set) continue; // generators never break; twists have their own tests
     assert.ok(seen.destroyed[kind] > 0, `no ${kind} was ever destroyed in 150 games`);
   }
   console.log(

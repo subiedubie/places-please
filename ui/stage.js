@@ -23,6 +23,8 @@ const PROP_COLORS = {
   flat: 0xc9bfae, strongbox: 0x55606f, costume: 0x1fb5a8, padlock: 0xe0a100, planter: 0x4caf50,
   bouquet: 0xff7aa8, candyjar: 0xff5a6e, dovecote: 0xd94b3d, footlights: 0x44506b,
   fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5, ivy: 0x3fae49, mouse: 0xa9a9b8, paintkeg: 0x6a2ce0, dove: 0xffffff, tortoise: 0x3fae6a,
+  vine: 0x2fc452, rolldrop: 0xff5f9e, fusebox: 0x6a4bff, rigbag: 0xb5541e, barrel: 0xa8622c, followspot: 0xffd75a, dressing: 0xff5a9a, giftbox: 0x2aa8ff,
+  greasepot: 0xff9a24, goo: 0xff9a24, propcase: 0x3f5688, rope: 0x5a3a8a, cannon: 0x18b8a8,
 };
 
 export async function createStage(canvas, theme) {
@@ -204,7 +206,7 @@ export async function createStage(canvas, theme) {
     const k = [layout.cell, layout.originX, layout.originY, layout.canvasW, layout.canvasH, dpr].join()
       + '|' + board.cols + '|' + board.cells.map((c) => (c === null ? '#' : '.')).join('')
       + '|' + (board.floor || []).map((f) => (f ? f[0] : '-')).join('')
-      + '|' + JSON.stringify([board.revolves, board.hidden]) + '|' + (board.paint || []).join('');
+      + '|' + JSON.stringify([board.revolves, board.hidden, board.belts]) + '|' + (board.paint || []).join('');
     if (k === trayKey) return;
     trayKey = k;
     for (const [sprite, shade] of [[tray, false], [dim, true]]) {
@@ -278,6 +280,12 @@ export async function createStage(canvas, theme) {
         const t = Math.random() * 6.283;
         spark(X(f.x) + Math.cos(t) * r, Y(f.y) + Math.sin(t) * r, 0xffa030, s * 4, t);
       }
+    } else if (f.type === 'roller') {
+      const x = f.x + f.dir * p * board.cols;
+      const my = f.y + (f.h - 1) / 2;
+      put({ t: 'block', kind: 'barrel', w: 1, h: f.h, hp: 1, charge: 0 }, X(x), Y(f.y), 1, 1);
+      glow(underPool, softDot(), X(x), Y(my), s * 3, s * (f.h + 1), 0xffc24a, a * 0.6);
+      if (p < 1) for (let i = 0; i < 5; i++) spark(X(x), Y(f.y) + Math.random() * s * (f.h - 1), 0xffb347, s * 4);
     } else if (f.type === 'beams') {
       (f.to || []).forEach((t, i) => {
         const dx = (t.x - f.x) * s * p;
@@ -422,19 +430,19 @@ export async function createStage(canvas, theme) {
     for (let i = 0; i < 10; i++) spark(X(x), Y(y), 0xffc94d, s * 3.2);
   }
   // Paint lands on cell `to` (from a keg, or spreading there).
-  function splash(from, to) {
+  function splash(from, to, color = 0x6a2ce0) {
     if (!layout || !live) return;
     const s = layout.cell;
     if (from) {
       for (let i = 0; i < 5; i++) {
         const life = 0.36 + i * 0.03;
-        bit(softDot(), X(from.x), Y(from.y), s * (0.8 - i * 0.1), 0x5a1fd0,
+        bit(softDot(), X(from.x), Y(from.y), s * (0.8 - i * 0.1), color,
           { vx: (X(to.x) - X(from.x)) / life, vy: (Y(to.y) - Y(from.y)) / life, life });
       }
     }
     for (let i = 0; i < 7; i++) {
       const t = Math.random() * 6.283;
-      bit(softDot(), X(to.x), Y(to.y), s * (0.16 + Math.random() * 0.22), 0x6a2ce0,
+      bit(softDot(), X(to.x), Y(to.y), s * (0.16 + Math.random() * 0.22), color,
         { vx: Math.cos(t) * s * 2.4, vy: Math.sin(t) * s * 2.4 - s, g: s * 8, life: 0.4 + Math.random() * 0.25 });
     }
   }
