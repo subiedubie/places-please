@@ -423,6 +423,8 @@ async function playBurst(step, drawFrame, T) {
   const draw = () => drawFrame(board, { ghosts, flashes, sprites, hide, fx });
   for (const f of flashes) f.alpha = 0;
   for (const f of fx) f.alpha = 0;
+  // A barrel that rolls away is not also left standing where it was.
+  for (const f of fx) if (f.type === 'roller') for (const g of ghosts) if (g.x === f.x && g.y === f.y) { g.gone = true; g.scale = 0; }
 
   // 1. The flights.
   if (step.flies.length) {
@@ -539,7 +541,7 @@ async function playBurst(step, drawFrame, T) {
       }
     });
     for (const f of fx) { f.p = 1; f.alpha = 1 - tp; }
-    for (const g of ghosts) g.scale = 1 - tp;
+    for (const g of ghosts) g.scale = g.gone ? 0 : 1 - tp;
     for (const f of flashes) f.alpha = (f.peak ?? 1) * (1 - tp);
     draw();
   });
