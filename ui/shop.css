@@ -1,0 +1,38 @@
+/* The Box Office (ui/shop.js). */
+.coins-card { align-items: center; }
+.home-shop {
+  position: relative; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px 0 6px;
+  border: 0; border-radius: 14px; background: #ffd45e; color: #5b3500; font: inherit; font-weight: 700; cursor: pointer;
+  box-shadow: 0 3px 0 #d99a00;
+}
+.home-shop:active { transform: translateY(2px); box-shadow: 0 1px 0 #d99a00; }
+.shop-dot { position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
+.shop-purse { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.shop-coins { font-size: 28px; font-weight: 800; }
+.shop-note { margin: 4px 0 0; text-align: center; font-weight: 600; color: #0b6a3a; }
+.shop-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.shop-feature {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; text-align: center;
+  border-radius: 16px; background: #e4f6ea; border: 2px solid #7fcf9c;
+}
+.shop-feature.deal { background: #fff3d1; border-color: #f0bf4c; }
+.shop-feature > .shop-buy { margin-top: auto; }
+.shop-was { color: var(--dim); font-size: 14px; }
+.shop-shelf { margin-top: 18px; }
+.shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.shop-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shop-item {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; text-align: center;
+  border-radius: 16px; background: #fff; border: 1.5px solid var(--line);
+}
+.shop-item > .shop-buy { margin-top: auto; }
+.shop-pic { position: relative; min-height: 54px; }
+.shop-owned {
+  position: absolute; right: -10px; bottom: -2px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
+  background: #1b2030; color: #fff; font-size: 13px; font-weight: 700; line-height: 22px;
+}
+.shop-name { font-weight: 700; }
+.shop-item .ev-reward, .shop-feature .ev-reward { justify-content: center; }
+.shop-buy { width: 100%; min-height: 44px; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 16px; }
+.shop-buy.free { background: #0b8a48; }
+.shop-buy:disabled { opacity: .4; }

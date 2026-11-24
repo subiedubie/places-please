@@ -58,7 +58,9 @@ function speedFactor(speed) {
 // theme      for clearMs and fallMs
 // speed      'normal' or 'fast'
 // before     optional: the board as it was before these events
-export async function playEvents(events, drawFrame, theme, speed, before) {
+// early      optional: a function giving the early move the player has made
+//            while this is playing (or null); it slides while the rest falls
+export async function playEvents(events, drawFrame, theme, speed, before, early) {
   if (!Array.isArray(events)) return;
   const k = speedFactor(speed);
 
@@ -111,7 +113,7 @@ export async function playEvents(events, drawFrame, theme, speed, before) {
 
   for (const step of steps) {
     try {
-      if (step.falls.length || step.spawns.length) await playFall(step, drawFrame, T);
+      if (step.falls.length || step.spawns.length) await playFall(step, drawFrame, T, early, 90 * k);
       else await playBurst(step, drawFrame, T);
     } catch {
       // If the fancy version trips on an unexpected shape, fall back to
@@ -138,6 +140,7 @@ function newStep() {
     effects: [],     // streaks, rings and beams to draw (see drawFx in render.js)
     falls: [],
     spawns: [],
+    swapped: false,  // two pieces changed places (already shown sliding)
     hits: [],        // obstacles hit, floor swept, things collected
     flies: [],       // Ninja Star flights: { from, to }
     flips: [],       // gems turned into power-ups: { x, y, was, kind }
@@ -172,6 +175,7 @@ function splitSteps(events, before) {
         if (isPos(c) && c.was && typeof c.was.t === 'string' && typeof c.kind === 'string') step.flips.push(c);
       }
     } else if (ev.type === 'spawn-power' && isPos(ev.at) && typeof ev.kind === 'string') step.powers.push(ev);
+    else if (ev.type === 'swap') step.swapped = true;
     else if (ev.type === 'frame' && ev.board) {
       step.board = ev.board;
       step.prev = last;
@@ -368,7 +372,7 @@ async function playBurst(step, drawFrame, T) {
   if (nothing) {
     // A picture with no detail about how it came to be: just show it.
     drawFrame(board);
-    return pause(T.pop * 0.5);
+    return step.swapped ? undefined : pause(T.pop * 0.5);
   }
   const draw = () => drawFrame(board, { ghosts, flashes, sprites, hide, fx });
   for (const f of flashes) f.alpha = 0;
@@ -486,7 +490,7 @@ async function playBurst(step, drawFrame, T) {
 // Pieces fall from where they were to where the new picture has them:
 // slowly at first, then faster, with a small squash as they land. New
 // pieces drop in from above the board.
-async function playFall(step, drawFrame, T) {
+async function playFall(step, drawFrame, T, early, swapMs) {
   const { board, falls, spawns } = step;
   const ms = T.fall;
   const { flashes, ghosts } = hitExtras(step.hits, step.prev);
@@ -533,6 +537,25 @@ async function playFall(step, drawFrame, T) {
     s.delay = 0.16 * (1 - y / Math.max(1, board.rows - 1)) + 0.05 * (((x * 7) % 5) / 5);
     s.drop = 0.3 + 0.2 * Math.sqrt(Math.hypot(s.dx, s.dy) / far);
   }
+  // An early move: its two pieces slide as soon as both are down, while
+  // others are still in the air.
+  let slide = null; // { a, b, from } (from = when it began, in ms)
+  const slideStep = (now) => {
+    if (!early) return;
+    const act = early();
+    if (!slide && act && act.type === 'swap') {
+      const down = (p) => {
+        const s = starts.get(key(p.x, p.y));
+        return !s || now >= (s.delay + s.drop) * ms;
+      };
+      if (down(act.a) && down(act.b)) slide = { a: act.a, b: act.b, from: now };
+    }
+    if (!slide) return;
+    const p = clamp01((now - slide.from) / Math.max(1, swapMs));
+    const { a, b } = slide;
+    offsets.set(key(a.x, a.y), { dx: (b.x - a.x) * p, dy: (b.y - a.y) * p });
+    offsets.set(key(b.x, b.y), { dx: (a.x - b.x) * p, dy: (a.y - b.y) * p });
+  };
   await tween(ms, (t) => {
     for (const [k, s] of starts) {
       const f = clamp01((t - s.delay) / s.drop);
@@ -550,8 +573,18 @@ async function playFall(step, drawFrame, T) {
     }
     for (const g of ghosts) g.scale = 1 - t;
     for (const f of flashes) f.alpha = (f.peak ?? 1) * (1 - t);
+    slideStep(t * ms);
     drawFrame(board, { offsets, ghosts, flashes });
   });
+  // If the slide began late, let it finish.
+  if (early && early() && early().type === 'swap') {
+    const t0 = slide ? Math.min(swapMs, ms - slide.from) : 0;
+    if (t0 < swapMs) {
+      offsets.clear();
+      await tween(swapMs - t0, (t) => { slideStep(ms + t * (swapMs - t0)); drawFrame(board, { offsets }); });
+    }
+    return; // the next step begins with the two already changed over
+  }
   drawFrame(board);
 }
 

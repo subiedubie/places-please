@@ -415,7 +415,9 @@ test('Friday bonus and weekend pass appear once, on the first look of the day', 
   events.list(at(2026, 11, 22, 6)); // Sunday: the same weekend, no second pass
   assert.equal(gift(at(2026, 11, 22, 6), 'Weekend Matinee'), 1);
   events.list(at(2026, 11, 27, 7)); // the next Friday
-  assert.equal(rewards.tray(at(2026, 11, 27, 7)).filter((i) => i.title === 'Curtain-Raiser').length, 1);
+  // (last week's is still waiting too: its boost ran out, its coins did not)
+  const both = rewards.tray(at(2026, 11, 27, 7)).filter((i) => i.title === 'Curtain-Raiser');
+  assert.deepEqual(both.map((i) => Boolean(i.reward.boost)), [false, true]);
 });
 
 test('session: finish feeds the events and returns eventLines and newRewards', () => {

@@ -3,8 +3,8 @@
 //   - coins, boosters and card packs are added to the save on claim
 //   - a timed boost ("30 minutes of free starting power-ups") starts its
 //     clock on claim, so it can be banked until wanted
-//   - anything left unclaimed disappears after 24 hours (config/events.js,
-//     REWARDS.trayHours)
+//   - a timed boost left unclaimed disappears after 24 hours (config/events.js,
+//     REWARDS.trayHours); coins, boosters and packs wait for ever
 // Kept in the save as:
 //   save.rewards = { nextId, items: [RewardItem], active: [{ powers, endsAt }] }
 //   save.inventory = { spot, show, prism, drill, stageleft, trapdoor, coinflip }
@@ -33,7 +33,14 @@ export function createRewards(getSave, { openPack = null } = {}) {
   // Drop tray items past their time and boosts that have run out.
   function prune(now) {
     const b = box();
-    b.items = b.items.filter((item) => now < item.expiresAt);
+    b.items = b.items.filter((item) => {
+      if (typeof item.expiresAt !== 'number' || now < item.expiresAt) return true;
+      // Only the timed boost runs out; whatever came with it stays.
+      const { boost, ...rest } = item.reward || {};
+      item.reward = rest;
+      item.expiresAt = null;
+      return Object.keys(rest).length > 0;
+    });
     b.active = b.active.filter((boost) => now < boost.endsAt);
     return b;
   }
@@ -48,7 +55,7 @@ export function createRewards(getSave, { openPack = null } = {}) {
         title,
         from,
         reward,
-        expiresAt: now + REWARDS.trayHours * HOUR,
+        expiresAt: reward && reward.boost ? now + REWARDS.trayHours * HOUR : null,
       };
       b.items.push(item);
       fresh.push(item);
@@ -68,8 +75,14 @@ export function createRewards(getSave, { openPack = null } = {}) {
       const index = b.items.findIndex((item) => item.id === id);
       if (index < 0) return { cards: [] };
       const [item] = b.items.splice(index, 1);
+      return api.grant(item.reward, now);
+    },
+
+    // Give a reward straight away (a claim, or something bought in the shop).
+    grant(given, now) {
+      const b = box();
       const save = getSave();
-      const reward = item.reward || {};
+      const reward = given || {};
       if (reward.coins) save.coins = (save.coins || 0) + reward.coins;
       for (const [kind, count] of Object.entries(reward.boosters || {})) {
         save.inventory[kind] = (save.inventory[kind] || 0) + count;

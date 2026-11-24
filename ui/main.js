@@ -16,6 +16,7 @@ import { createEvents } from './events.js';
 import { createBoosterUi } from './boosters.js';
 import { createStage } from './stage.js'; // the PixiJS drawing of the board
 import { loadArt } from './art.js';
+import { createShopUi } from './shop.js';
 import { fx } from './fx.js';
 import { flyTo } from './fly.js';
 import { initHelp, showLevelIntro } from './help.js'; // rule cards, "?" and How to play
@@ -66,6 +67,13 @@ const boosters = createBoosterUi({
   onHomeChange: () => goHome(),
 });
 
+// The Box Office: opened from the coins card on Home.
+const shopUi = createShopUi({
+  session, eventUi,
+  confirm: (text, yes, no) => ui.confirm(text, yes, no),
+  onChange: () => { if (!ui.$('screen-home').hidden) goHome(); },
+});
+
 const speed = () => (session.save.settings && session.save.settings.speed) || 'normal';
 const speedFactor = () => (speed() === 'fast' ? 0.5 : 1);
 
@@ -77,7 +85,7 @@ function drawFrame(board, overlay) {
   shown = board;
   // superPrism: Magic Balls are drawn in their Super form on a Super level.
   const extra = { ...(overlay || {}), superPrism: !!(session.game && session.game.superPrism) };
-  if (pressed && !busy) extra.pressed = pressed;
+  if (pressed && (!busy || open)) extra.pressed = pressed;
   if (stage) stage.draw(board, layout, extra);
   else drawBoard(ctx, board, layout, theme, extra);
 }
@@ -117,6 +125,7 @@ function goHome(round) {
   // games remember the lost level in the save, so this survives a restart.)
   const retry = !resuming && Boolean(save.events) && save.events.failedLevel === save.level;
   ui.home(save, tier, resuming, gift, retry);
+  shopUi.home();
   boosters.refreshHome(resuming); // pre-level boosters, and the bonus-level name
   ui.show('home'); // before the badges: they are sized to the height of Home
   eventUi.home(round ? { result: round.result, before: round.before } : null);
@@ -174,19 +183,52 @@ function goSettings(message) {
 
 // ---- Playing a move ----
 
+// EARLY MOVES: while a move is playing out the player may already make the
+// next one. It waits here until the pieces it needs have landed.
+let open = false;      // true while early moves are being accepted
+let wanted = null;     // { action, held } as the finger made it
+let accepted = null;   // the one that will be made when this step ends
+let landing = false;   // true while the step being played ends on a full board
+
+const sameCell = (p, q) => JSON.stringify(p) === JSON.stringify(q);
+const heldCells = (action, board) => (action.type === 'swap' ? [action.a, action.b] : [action.at]).map((p) => get(board, p.x, p.y));
+
+// Can the waiting move be made on the board the pieces are landing on?
+function considerEarly() {
+  if (!wanted || accepted || !landing || !session.game) return;
+  const now = heldCells(wanted.action, session.game.board);
+  const { action, held } = wanted;
+  wanted = null;
+  if (now.every((c, i) => sameCell(c, held[i])) && session.canMove(action)) {
+    accepted = action;
+    pressed = null;
+  }
+}
+
+function earlyAction(action) {
+  if (action.type !== 'swap' && action.type !== 'tap') return;
+  wanted = { action, held: heldCells(action, shown) };
+  considerEarly();
+}
+
 async function handleAction(action) {
-  if (busy || !onLevel) return;
+  if (!onLevel) return;
+  if (busy) { if (open) earlyAction(action); return; }
   busy = true;
   pressed = null;
+  wanted = null;
+  accepted = null;
   try {
     const before = shown; // the board as the player sees it now
-    // A booster goes through the same playback as a move. 'wake' does nothing
-    // on the board: it only re-opens the out-of-moves sheet (see startLevel).
-    const events = action.type === 'booster' ? session.useBooster(action.kind, action.at)
-      : action.type === 'wake' ? [{ type: 'wake' }]
-      : session.doAction(action);
-    const nothingHappened = !events || events.length === 0 || events[0].type === 'invalid';
     const swapMs = 70 * speedFactor();
+    const stepped = action.type === 'swap' || action.type === 'tap';
+    // A booster goes through the same playback as a move, in one piece. 'wake'
+    // does nothing on the board: it re-opens the out-of-moves sheet (startLevel).
+    const move = stepped ? session.startMove(action) : null;
+    let step = move ? move.next() : null;
+    const events = stepped ? (step ? step.events : [])
+      : action.type === 'booster' ? session.useBooster(action.kind, action.at) : [{ type: 'wake' }];
+    const nothingHappened = !events || (events.length === 0 && !stepped) || (events[0] && events[0].type === 'invalid');
 
     if (nothingHappened) {
       // Not a legal move. It costs nothing; show a small "no".
@@ -203,7 +245,21 @@ async function handleAction(action) {
     } else {
       ui.hud({ ...session.game, targets: shownTargets }); // moves drop at once
       if (action.type === 'swap') await playSwap(before, action.a, action.b, drawFrame, swapMs, false);
-      await playEvents(events, drawFrame, theme, speed(), before);
+      if (!stepped) await playEvents(events, drawFrame, theme, speed(), before);
+      else {
+        open = true;
+        while (step) {
+          landing = step.landed;
+          accepted = null;
+          considerEarly(); // one made a moment ago, while gems were bursting
+          await playEvents(step.events, drawFrame, theme, speed(), shown, landing ? () => accepted : null);
+          rememberTargets();
+          const early = accepted;
+          step = move.next(early || undefined);
+          ui.hud({ ...session.game, targets: shownTargets });
+        }
+        open = false;
+      }
       // Finish on exactly what the rules say the board is now.
       drawFrame(cloneBoard(session.game.board));
     }
@@ -223,6 +279,9 @@ async function handleAction(action) {
     if (session.game) drawFrame(cloneBoard(session.game.board));
   } finally {
     busy = false;
+    open = false;
+    wanted = null;
+    accepted = null;
   }
 }
 
@@ -263,7 +322,7 @@ attachInput(
   () => shown,
   handleAction,
   // (while a booster is armed, taps belong to it: see ui/boosters.js)
-  () => busy || !onLevel || !layout || !shown || Boolean(boosters.armed()),
+  () => (busy && !open) || !onLevel || !layout || !shown || Boolean(boosters.armed()),
   (cell) => { // highlight the cell under the finger
     pressed = cell;
     if (!busy && shown) drawFrame(shown);

@@ -1,9 +1,10 @@
 // The flow of play with no screen code: start a level, take actions, finish,
 // and keep the save up to date after every step. The screens (ui/) call this.
 import { generateLevel } from '../levels/generate.js';
-import { newGame, act, serialize, deserialize } from '../engine/game.js';
+import { newGame, act, actSteps, finishSteps, isLegal, serialize, deserialize } from '../engine/game.js';
 import { settleLevel } from './economy.js';
 import { ECONOMY } from '../config/economy.js';
+import { createMarket } from './market.js'; // the coin shop, and boosters earned by winning
 import { attachShop } from './shop.js'; // boosters, extra moves, bonus-level pay
 import { createEvents } from './events/index.js'; // the side games
 import { createRewards } from './rewards.js'; // the rewards tray
@@ -82,6 +83,44 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     },
 
     // One swap or tap. Returns the engine's event list for the screen to play.
+    // A move played one step at a time (see actSteps in engine/game.js).
+    // Returns an object with next(earlyAction) -> step, or null when the move
+    // is over. What the board will come to if nothing more is done is saved
+    // straight away, so closing the app half way loses nothing.
+    startMove(action) {
+      const game = session.game;
+      if (!game) return { next: () => null };
+      const steps = actSteps(game, action);
+      const savePlanned = () => {
+        const copy = deserialize(serialize(game));
+        for (const step of finishSteps(copy)) void step;
+        if (copy.level.bonus && copy.status === 'lost') copy.status = 'won';
+        session.save.current = serialize(copy);
+        write();
+      };
+      let first = true;
+      let made = false;
+      return {
+        next(early) {
+          const r = steps.next(early);
+          if (r.done) {
+            if (made) {
+              session.bonusNeverLost([]); // a bonus level out of moves counts as won
+              session.save.current = serialize(game);
+              write();
+            }
+            return null;
+          }
+          const step = r.value;
+          if (first) made = !(step.events.length > 0 && step.events[0].type === 'invalid');
+          if (made && (first || step.early)) savePlanned();
+          first = false;
+          return step;
+        },
+      };
+    },
+    // Would this be accepted as an early move right now?
+    canMove: (action) => Boolean(session.game) && isLegal(session.game, action),
     doAction(action) {
       if (!session.game) return [{ type: 'invalid' }];
       const events = act(session.game, action);
@@ -119,6 +158,11 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
         movesLeft: game.movesLeft,
         now: now(),
       });
+      const dropLine = market.onLevel({
+        won: game.status === 'won', tier: game.level.tier, bonus: game.level.bonus, now: now(),
+      });
+      if (dropLine) eventLines.push(dropLine);
+      newRewards.push(...rewards.takeFresh());
       write();
       session.game = null;
       session.level = null;
@@ -176,6 +220,14 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     list: (t) => saved(events.list(t)),
     detail: (id, t) => saved(events.detail(id, t)),
     start: (id, t) => saved(events.start(id, t)),
+  };
+  // The Box Office.
+  const market = createMarket(getSave, rewards);
+  session.market = {
+    title: market.title,
+    view: () => market.view(now()),
+    buy: (id) => saved(market.buy(id, now())),
+    takeGift: () => saved(market.takeGift(now())),
   };
   session.rewards = {
     tray: (t) => saved(rewards.tray(t)),

@@ -267,13 +267,24 @@ function powerSpot(group, origins) {
 // cascades the player did not directly cause).
 // Returns the ordered list of events (see the event shapes pushed below).
 export function settle(board, ctx, origins = []) {
-  const events = [];
+  const all = [];
+  for (const step of settleSteps(board, ctx, origins)) all.push(...step.events);
+  return all;
+}
+
+// The same, one step at a time. Each step is { events, landed }; landed is
+// true when the board is full again (everything has somewhere to land), which
+// is when the player may slip in an early move (see actSteps in game.js).
+export function* settleSteps(board, ctx, origins = []) {
+  let events = [];
 
   dropAndFill(board, ctx, events, false);
+  if (events.length > 0) yield { events, landed: true };
 
   for (let pass = 1; ; pass++) {
     const groups = findGroups(board);
     if (groups.length === 0) break;
+    events = [];
 
     // Every pass after the first is a cascade (chain reaction).
     if (pass > 1) events.push({ type: 'cascade', depth: pass });
@@ -314,9 +325,10 @@ export function settle(board, ctx, origins = []) {
 
     // A snapshot of the board with the cleared gaps and new power-ups.
     events.push({ type: 'frame', board: cloneBoard(board) });
+    yield { events, landed: false };
 
+    events = [];
     dropAndFill(board, ctx, events, true);
+    yield { events, landed: true };
   }
-
-  return events;
 }

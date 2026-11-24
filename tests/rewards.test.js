@@ -29,15 +29,18 @@ test('a reward waits in the tray and is applied only on claim', () => {
   assert.equal(save.coins, 500);
 });
 
-test('tray items expire after 24 hours', () => {
+test('only a timed boost expires, after 24 hours', () => {
   const save = defaultSave();
   const rewards = createRewards(() => save);
-  const item = rewards.add({ coins: 100 }, 'Step 1', 'Prop Room', T0);
+  const item = rewards.add({ coins: 100, boost: { powers: ['show'], minutes: 15 } }, 'Step 1', 'Prop Room', T0);
   assert.equal(item.expiresAt, T0 + 24 * HOUR);
-  assert.equal(rewards.tray(T0 + 24 * HOUR - 1).length, 1);
-  assert.equal(rewards.tray(T0 + 24 * HOUR).length, 0);
-  rewards.claim(item.id, T0 + 25 * HOUR);
-  assert.equal(save.coins, 0); // gone, not paid
+  assert.ok(rewards.tray(T0 + 24 * HOUR - 1)[0].reward.boost);
+  const left = rewards.tray(T0 + 24 * HOUR);
+  assert.deepEqual(left[0].reward, { coins: 100 }); // the boost is gone, the coins wait
+  rewards.claim(item.id, T0 + 240 * HOUR);
+  assert.equal(save.coins, 100);
+  rewards.add({ boost: { powers: ['show'], minutes: 15 } }, 'Step 2', 'Prop Room', T0);
+  assert.equal(rewards.tray(T0 + 25 * HOUR).length, 0);
 });
 
 test('a claimed 30-minute boost is active for exactly 30 minutes', () => {

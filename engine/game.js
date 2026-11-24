@@ -13,7 +13,7 @@ import { OBSTACLES2 } from '../config/obstacles.js';
 import { makeRng } from './rng.js';
 import { findGroups } from './matches.js';
 import { DROP_RULES } from './drops.js';
-import { settle } from './resolve.js';
+import { settleSteps } from './resolve.js';
 import { fire, combine } from './powers.js';
 import { hasLegalMove, reshuffle } from './moves.js';
 
@@ -282,26 +282,33 @@ function swapCells(board, a, b) {
 //   action = { type: 'swap', a: {x,y}, b: {x,y} }   or   { type: 'tap', at: {x,y} }
 // An action that is not allowed returns [{ type: 'invalid' }] and changes nothing.
 export function act(game, action) {
-  if (game.status !== 'playing' || !action) return INVALID();
+  const events = [];
+  for (const step of actSteps(game, action)) events.push(...step.events);
+  return events;
+}
+
+// Carry out just the move itself: the swap, or the power-up going off.
+// Returns { events, origins }, or null if it is not allowed (nothing changed).
+function applyMove(game, action) {
   const board = game.board;
   const events = [];
-  // superPrism: set when the level was started on a 10-win streak.
+  // superPrism: set when the level was started on a long enough win streak.
   const opts = { rng: game._rng, needs: stillNeeded(game), superPrism: !!game.superPrism };
   let origins = [];
 
   if (action.type === 'tap') {
     const at = action.at;
     const cell = at ? get(board, at.x, at.y) : null;
-    if (!isPower(cell)) return INVALID();
+    if (!isPower(cell)) return null;
     bump(game.tally.fired, cell.kind);
     events.push(...fire(board, at, opts));
   } else if (action.type === 'swap') {
     const { a, b } = action;
-    if (!a || !b || !adjacent(a, b)) return INVALID();
+    if (!a || !b || !adjacent(a, b)) return null;
     const ca = get(board, a.x, a.y), cb = get(board, b.x, b.y);
     // Only pieces and power-ups can be swapped: not holes, empty cells,
     // obstacles or droppers.
-    if (!(isPiece(ca) || isPower(ca)) || !(isPiece(cb) || isPower(cb))) return INVALID();
+    if (!(isPiece(ca) || isPower(ca)) || !(isPiece(cb) || isPower(cb))) return null;
 
     if (isPower(ca) && isPower(cb)) {
       // Two power-ups together: the bigger combined effect, centred on b.
@@ -321,41 +328,86 @@ export function act(game, action) {
     } else {
       // Two ordinary pieces: only allowed if it makes a match.
       swapCells(board, a, b);
-      if (findGroups(board).length === 0) {
+      // (The match must include one of the two pieces: during a chain reaction
+      // there may be other matches waiting that this swap has no part in.)
+      const part = (c) => (c.x === a.x && c.y === a.y) || (c.x === b.x && c.y === b.y);
+      if (!findGroups(board).some((g) => g.cells.some(part))) {
         swapCells(board, a, b); // put them back
-        return INVALID();
+        return null;
       }
       events.push({ type: 'swap', a, b }, { type: 'frame', board: cloneBoard(board) });
       origins = [b, a];
     }
   } else {
-    return INVALID();
+    return null;
   }
+  game.movesLeft -= 1;
+  game.moveCount += 1;
+  return { events, origins };
+}
 
-  // Clear matches, let pieces fall, refill, and repeat until the board is still.
-  events.push(...settle(board, { ...dropContext(game), needs: opts.needs }, origins));
-  recordEvents(game, events);
+const targetsMet = (game) => game.targets.every((t) => t.have >= t.need);
 
-  // Curtains open once enough of their color has been cleared this level.
-  // What was behind them may fall or match, so the board settles again (and
-  // that may open more curtains).
+// Would this move be accepted right now? (Tried on a copy.)
+export function isLegal(game, action) {
+  if (!action || game.status !== 'playing' || game.movesLeft <= 0 || targetsMet(game)) return false;
+  const copy = deserialize(serialize(game));
+  return applyMove(copy, action) !== null;
+}
+
+// A whole move, one step at a time, so the screen can play each step before
+// the rules go on. Each step is { events, landed }.
+// EARLY MOVES: after a step with landed = true the caller may pass the
+// player's next action to next(). It is made at once, before the matches that
+// were about to clear do so, so it may help or spoil them. The step that
+// answers it has `early: true` if it was accepted.
+export function* actSteps(game, action) {
+  if (game.status !== 'playing' || !action) { yield { events: INVALID(), landed: false }; return; }
+  const move = applyMove(game, action);
+  if (!move) { yield { events: INVALID(), landed: false }; return; }
+  recordEvents(game, move.events);
+  yield { events: move.events, landed: false };
+  yield* finishSteps(game, move.origins);
+}
+
+// Let the board come to rest (clear, fall, refill, repeat), then end the move.
+export function* finishSteps(game, origins = []) {
+  const board = game.board;
   for (;;) {
+    const ctx = { ...dropContext(game), needs: stillNeeded(game) };
+    let again = false;
+    for (const step of settleSteps(board, ctx, origins)) {
+      recordEvents(game, step.events);
+      const early = yield step;
+      if (!early || !step.landed || game.movesLeft <= 0 || targetsMet(game)) continue;
+      const move = applyMove(game, early);
+      if (!move) continue;
+      const flipped = flipMakeupCases(board); // the move before this one is over
+      if (flipped.length > 0) move.events.push({ type: 'toggle', cells: flipped }, { type: 'frame', board: cloneBoard(board) });
+      recordEvents(game, move.events);
+      yield { events: move.events, landed: false, early: true };
+      origins = move.origins;
+      again = true;
+      break;
+    }
+    if (again) continue;
+    origins = [];
+
+    // Curtains open once enough of their color has been cleared this level.
+    // What was behind them may fall or match, so the board settles again.
     const opened = openCurtains(game);
     if (opened.length === 0) break;
-    const more = [...opened, { type: 'frame', board: cloneBoard(board) }];
-    more.push(...settle(board, { ...dropContext(game), needs: opts.needs }, []));
-    recordEvents(game, more);
-    events.push(...more);
+    const events = [...opened, { type: 'frame', board: cloneBoard(board) }];
+    recordEvents(game, events);
+    yield { events, landed: false };
   }
 
   // Makeup cases flip open/closed after every move.
+  const events = [];
   const flipped = flipMakeupCases(board);
   if (flipped.length > 0) {
     events.push({ type: 'toggle', cells: flipped }, { type: 'frame', board: cloneBoard(board) });
   }
-
-  game.movesLeft -= 1;
-  game.moveCount += 1;
 
   // Never leave the player stuck.
   if (!hasLegalMove(board)) {
@@ -363,11 +415,10 @@ export function act(game, action) {
     events.push({ type: 'reshuffle' }, { type: 'frame', board: cloneBoard(board) });
   }
 
-  if (game.targets.every((t) => t.have >= t.need)) game.status = 'won';
+  if (targetsMet(game)) game.status = 'won';
   else if (game.movesLeft <= 0) game.status = 'lost';
   if (game.status !== 'playing') events.push({ type: 'end', status: game.status });
-
-  return events;
+  if (events.length > 0) yield { events, landed: false };
 }
 
 // Turn a game into plain data that can be stored as JSON, and back.

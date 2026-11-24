@@ -4,7 +4,7 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v11';
+const CACHE = 'places-please-v12';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
@@ -21,6 +21,7 @@ const FILES = [
   './config/help.js',
   './config/obstacles.js',
   './config/rivals.js',
+  './config/shop.js',
   './config/theme.js',
   './engine/board.js',
   './engine/boosters.js',
@@ -54,6 +55,7 @@ const FILES = [
   './meta/events/sprint.js',
   './meta/events/streak.js',
   './meta/events/util.js',
+  './meta/market.js',
   './meta/rewards.js',
   './meta/save.js',
   './meta/session.js',
@@ -72,6 +74,8 @@ const FILES = [
   './ui/main.js',
   './ui/render.js',
   './ui/screens.js',
+  './ui/shop.css',
+  './ui/shop.js',
   './ui/stage.js',
   './ui/style.css',
   './vendor/pixi-LICENSE.txt',

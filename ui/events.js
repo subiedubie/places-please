@@ -19,6 +19,7 @@
 
 import { drawPowerIcon, drawPiece } from './render.js';
 import { flyTo } from './fly.js';
+import { drawArt, hasArt } from './art.js';
 import { drawEventIcon } from './eventicons.js'; // the round picture badges
 import { theme } from '../config/theme.js';
 
@@ -304,6 +305,7 @@ function kindName(kind) {
 function kindIcon(kind, size) {
   const name = kindName(kind);
   const boardKind = kind === 'spot' ? 'spot-h' : kind; // the Missile is drawn as a row Missile
+  if (hasArt(kind)) return icon(size, (ctx, s) => drawArt(ctx, kind, s / 2, s / 2, s, s), name);
   if (theme.powers[boardKind]) return icon(size, (ctx, s) => drawPowerIcon(ctx, boardKind, s, theme), name);
   if (kind === 'drill') return icon(size, paintDrill, name);
   if (kind === 'stageleft') return icon(size, (ctx, s) => paintLineShot(ctx, s, false), name);
@@ -325,11 +327,11 @@ export function renderReward(reward, size = 22) {
     box.appendChild(c);
     return c;
   };
-  if (reward.coins > 0) chip(icon(size, paintCoin, 'Coins'), num(reward.coins));
+  if (reward.coins > 0) chip(icon(size, hasArt('coin') ? (ctx, s) => drawArt(ctx, 'coin', s / 2, s / 2, s, s) : paintCoin, 'Coins'), num(reward.coins));
   for (const [kind, count] of Object.entries(reward.boosters || {})) {
     if (count > 0) chip(kindIcon(kind, size), '×' + num(count));
   }
-  if (reward.packs > 0) chip(icon(size, paintPack, 'Card pack'), '×' + num(reward.packs));
+  if (reward.packs > 0) chip(icon(size, hasArt('cardpack') ? (ctx, s) => drawArt(ctx, 'cardpack', s / 2, s / 2, s, s) : paintPack, 'Card pack'), '×' + num(reward.packs));
   if (reward.boost && list(reward.boost.powers).length) {
     const c = chip(null, minutesText(reward.boost.minutes) + ': starts with');
     c.classList.add('ev-chip-boost');
@@ -1146,5 +1148,5 @@ export function createEvents(session, onChange) {
     mount.append(seg, h('p', 'note', TEXT.rivalsNote));
   }
 
-  return { home, snapshot, openRound, level, results, settings, openTray, openAlbum, openDetail, closeSheet, renderReward };
+  return { home, snapshot, openRound, level, results, settings, openTray, openAlbum, openDetail, closeSheet, renderReward, openSheet, refreshSheet: () => drawSheet(false) };
 }
