@@ -62,7 +62,7 @@ export const RULES = {
   truss:       'Hit a Lighting Truss with power-ups 2 times.',
   ticketbooth: 'Hit a Ticket Booth with a power-up, then make 3 matches next to it to win three power-ups.',
   makeupcase:  'Make a match next to a Makeup Case while it is open. It opens and closes after every move.',
-  curtain:     "Clear enough pieces of a Curtain's colour and every Curtain of that colour opens.",
+  curtain:     "The meter on a Curtain shows how many more of its gem to clear, anywhere on the board. At 0 every Curtain of that color opens.",
 
   // Things a level can ask you to collect
   dove:    'Make 3 matches next to a Top Hat to release each Dove.',

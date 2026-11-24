@@ -1,0 +1,195 @@
+/* THE SHOWY LOOK of Home and the competition sheets. Loaded last, so it wins
+   over ui/style.css and ui/events.css.
+   Fonts (both free, SIL Open Font License, kept in art/fonts):
+   Limelight for the marquee, Lilita One for numbers and buttons. */
+@font-face { font-family: Limelight; src: url(../art/fonts/limelight.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: 'Lilita One'; src: url(../art/fonts/lilita-one.woff2) format('woff2'); font-display: swap; }
+:root { --show: Limelight, Georgia, serif; --game: 'Lilita One', ui-rounded, system-ui, sans-serif; }
+
+#screen-home { position: relative; }
+#screen-home::before {           /* a bright spotlight behind everything */
+  content: ''; position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(ellipse 80% 55% at 50% 38%, #fff 35%, #ffffff00), linear-gradient(#ffd9ec, #dfeaff 55%, #d9f4ff);
+}
+.show-rays {
+  position: absolute; inset: -60%; pointer-events: none;
+  background: repeating-conic-gradient(rgba(255, 255, 255, .26) 0 10deg, rgba(255, 255, 255, 0) 10deg 20deg);
+  -webkit-mask: radial-gradient(closest-side, #000, #0000 85%); mask: radial-gradient(closest-side, #000, #0000 85%);
+}
+
+/* A sign with light bulbs round its edge. */
+.marquee {
+  font-family: var(--show); font-style: normal; font-weight: 400; color: #fff; text-align: center; white-space: nowrap;
+  padding: 10px 18px 11px; border-radius: 16px; border: 10px solid transparent;
+  background:
+    linear-gradient(#b0103c, #7a0634) padding-box,
+    radial-gradient(circle, #fffbe0 0 2.4px, #fff0a0 3px, #0000 3.8px) 0 0 / 10px 10px border-box, linear-gradient(#e08a00, #e08a00) border-box;
+  box-shadow: 0 0 0 2px #7a3c00, 0 5px 0 2px #7a3c00, 0 10px 18px rgba(80, 0, 40, .3); text-shadow: 0 1px 2px #40001c;
+}
+
+/* ---- Home: the middle column ---- */
+.home-top { height: 66px; }
+.home-top .title { font-size: 22px; line-height: 1.1; padding: 8px 10px 9px; color: #fff; letter-spacing: 0; }
+.home-mid > .home-top { margin-bottom: 0; }
+.home-mid { gap: 12px; }
+.home-round { border-radius: 16px; border: 3px solid #0b8a48; }
+
+.show {
+  appearance: none; -webkit-appearance: none; position: relative; overflow: hidden; width: 100%; min-height: 250px; padding: 12px 10px 14px;
+  border: 4px solid #ffc83d; border-radius: 24px; color: #fff; font: inherit; cursor: pointer; touch-action: manipulation;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  background: radial-gradient(circle at 50% 36%, var(--c), var(--d));
+  box-shadow: inset 0 0 0 2px rgba(60, 20, 0, .55), 0 5px 0 #b87400, 0 12px 20px rgba(40, 20, 80, .28);
+}
+.show > * { position: relative; }
+.show > .show-rays { position: absolute; inset: -40% -60% -10%; }
+.show:active { transform: translateY(2px); }
+.show.turn .show-pic { animation: show-in .45s ease-out; }
+@keyframes show-in { from { transform: scale(.6) rotate(-20deg); } 60% { transform: scale(1.12) rotate(4deg); } }
+.show-name { font: 21px/1.1 var(--show); text-shadow: 0 1px 3px rgba(0, 0, 0, .45); padding: 0 4px; }
+.show-pic { filter: drop-shadow(0 5px 5px rgba(0, 0, 0, .35)); }
+.show-pic canvas { display: block; }
+.show-big, .show-go {
+  margin-top: -16px; padding: 2px 16px 4px; border-radius: 18px; font: 23px/1.1 var(--game); color: #5a2a00;
+  background: linear-gradient(#fff6c0, #ffc21c); border: 2px solid #7a3c00; box-shadow: 0 3px 0 #7a3c00;
+}
+.show-go { background: linear-gradient(#6fe898, #0f9c48); color: #fff; border-color: #05502a; box-shadow: 0 3px 0 #05502a; animation: ev-pulse 1.1s ease-in-out infinite; }
+.show-track { width: 92%; height: 18px; border-radius: 10px; background: rgba(0, 0, 0, .45); border: 2px solid rgba(255, 255, 255, .85); overflow: hidden; }
+.show-fill { display: block; height: 100%; border-radius: 8px; background: linear-gradient(#fff3a8, #ffc21c 50%, #f09a00); }
+.show-line { font: 16px/1.2 var(--game); text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+.show-prize { padding: 4px 12px; border-radius: 14px; background: rgba(255, 255, 255, .94); color: #2a1a4a; max-width: 100%; }
+.show-prize .ev-reward { justify-content: center; gap: 2px 8px; }
+.show-time { margin-top: auto; font: 14px/1.3 var(--game); padding: 1px 12px 2px; border-radius: 10px; background: rgba(0, 0, 0, .35); }
+.show-dots { display: flex; justify-content: center; margin-top: 8px; }
+.show-dot { appearance: none; -webkit-appearance: none; border: 0; background: none; padding: 8px 4px; cursor: pointer; }
+.show-dot::before { content: ''; display: block; width: 9px; height: 9px; border-radius: 50%; background: #a9b6d4; }
+.show-dot.on::before { background: #f0183c; width: 20px; border-radius: 5px; }
+
+.home-mid .level-card { background: #fff; border: 3px solid #ffc83d; border-radius: 18px; box-shadow: 0 4px 0 #d99a00; padding: 4px 10px 8px; }
+.home-mid .level-card .label { font: 15px/1.3 var(--game); letter-spacing: 0; text-transform: none; color: #8a2cf0; }
+.home-mid .level-card .big { font: 32px/1.05 var(--game); color: #2a1a4a; }
+.home-mid .coins-card { background: #221a3a; border: 3px solid #ffc83d; border-radius: 18px; padding: 4px 6px 4px 14px; color: #fff; align-items: center; }
+.home-mid .coins-card .label { text-transform: none; letter-spacing: 0; font: 13px/1.2 var(--game); color: #ffd98a; }
+.home-mid .coins-card .mid { font: 25px/1.1 var(--game); }
+.home-shop {
+  position: relative; display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0 14px 2px 4px; border: 0; border-radius: 14px;
+  background: linear-gradient(#ffe680, #ffc21c 52%, #f0a000); color: #5a2a00; font: 20px/1 var(--game); cursor: pointer;
+  box-shadow: inset 0 2px 0 #fff8d0, 0 4px 0 #a86400;
+}
+.home-shop canvas { margin: -8px 0; }
+.home-shop:active { transform: translateY(3px); box-shadow: inset 0 2px 0 #fff8d0, 0 1px 0 #a86400; }
+#home-play {
+  min-height: 70px; border-radius: 22px; font: 33px/1 var(--game); color: #fff; text-shadow: 0 3px 0 rgba(90, 0, 20, .6);
+  background: linear-gradient(#ff7a6a, #f0283c 50%, #cf0e2c); border: 4px solid #ffc83d;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .5), 0 6px 0 #7a0418, 0 13px 18px rgba(120, 0, 40, .3);
+}
+#home-play:active { transform: translateY(4px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .4), 0 2px 0 #7a0418; }
+.home-bottom .btn { background: rgba(255, 255, 255, .85); font-family: var(--game); font-weight: 400; min-width: 140px; }
+
+/* ---- Home: the badges ---- */
+.ev-b-ring {                      /* how far along: gold fills the ring */
+  position: absolute; inset: -4px; border-radius: 50%;
+  background: conic-gradient(#25d06a calc(var(--part) * 360deg), #ffffff calc(var(--part) * 360deg));
+  box-shadow: 0 0 0 2px var(--d), 0 4px 8px rgba(40, 20, 80, .3);
+}
+.ev-b-pic { filter: none; margin-top: 2px; }
+.ev-b-pic .ev-b-canvas { position: relative; }
+.ev-b-bubble, .ev-b-start, .home-side.right .ev-b-bubble, .home-side.right .ev-b-start {
+  top: auto; bottom: -9px; left: 50%; right: auto; transform: translateX(-50%); min-width: 34px; height: 20px; padding: 0 7px;
+  font: 14px/17px var(--game); color: #fff; background: var(--d); border: 2px solid #fff; border-radius: 10px; box-shadow: 0 2px 3px rgba(30, 10, 60, .35);
+}
+.ev-b-bubble.p1 { background: linear-gradient(#fff0a0, #ffb81c); color: #5a2a00; }
+.ev-b-bubble.p2 { background: linear-gradient(#fff, #b4c0d6); color: #2c3650; }
+.ev-b-bubble.p3 { background: linear-gradient(#f8c090, #c86a2c); color: #3a1404; }
+.ev-b-bubble.count { background: #f0183c; }
+.ev-b-start, .home-side.right .ev-b-start { background: #0b8a48; text-transform: none; letter-spacing: 0; animation: ev-start 1.1s ease-in-out infinite; }
+@keyframes ev-start { 50% { transform: translateX(-50%) scale(1.16); } }
+.ev-b-bump { animation: ev-bump2 .35s ease-out; }
+@keyframes ev-bump2 { 45% { transform: translateX(-50%) scale(1.4); } }
+.ev-b-time { margin-top: 11px; background: rgba(255, 255, 255, .85); font: 12px/15px var(--game); letter-spacing: 0; }
+
+/* ---- The sheet of one competition ---- */
+.ev-x { width: 44px; min-width: 44px; padding: 0; border-radius: 50%; font-size: 18px; background: #fff; color: #2a1a4a; box-shadow: 0 3px 6px rgba(30, 10, 60, .3); outline: 0; }
+.ev-sheet.show-sheet { overflow: hidden; background: #f4f7ff; max-height: 95%; }
+.show-sheet .ev-sheet-head { position: absolute; right: 0; z-index: 3; border: 0; display: block; }
+.ev-back { position: fixed; }
+.ev-sheet { position: relative; }
+.show-sheet .ev-sheet-title, .show-sheet .ev-sheet-head > :first-child { display: none; }
+.show-sheet .ev-sheet-body { padding-top: 0; gap: 14px; }
+.show-sheet .ev-hero {
+  position: relative; overflow: hidden; margin: 0 -16px; padding: 18px 20px 24px; flex-direction: column; gap: 6px; text-align: center; color: #fff;
+  background: radial-gradient(circle at 50% 35%, var(--c), var(--d)); border-bottom: 5px solid #ffc83d; box-shadow: 0 2px 0 #8a4a00;
+}
+.ev-hero > .show-rays { inset: -70% -40% -40%; }
+.ev-hero .ev-icon { position: relative; width: 116px !important; height: 116px !important; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .35)); }
+.ev-hero-text { position: relative; flex: none; width: 100%; }
+.show-sheet .ev-hero-title { color: #fff; font: 30px/1.1 var(--show); text-shadow: 0 1px 4px rgba(0, 0, 0, .45); }
+.show-sheet .ev-hero .note { color: #fff; font-size: 15px; font-weight: 600; max-width: 34ch; margin: 0 auto; text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.show-sheet .ev-meta { justify-content: center; margin-top: -24px; position: relative; }
+.show-sheet .ev-summary, .show-sheet .ev-meta .ev-time, .show-sheet .ev-tag {
+  font: 19px/1.2 var(--game); padding: 3px 16px 5px; border-radius: 18px; background: linear-gradient(#fff6c0, #ffc21c); color: #5a2a00; border: 2px solid #7a3c00; box-shadow: 0 3px 0 #7a3c00;
+}
+.show-sheet .ev-meta .ev-time { background: #221a3a; color: #fff; border-color: #ffc83d; font-size: 16px; }
+.show-sheet .ev-meta .ev-tag.lost { background: #d8dde8; }
+.show-sheet .ev-head, .show-sheet .ev-prizes .label { font: 20px/1.2 var(--game); letter-spacing: 0; text-transform: none; color: var(--d); text-align: center; margin-top: 4px; }
+.show-sheet .ev-prizes { background: linear-gradient(#fffbe6, #ffe9a8); border: 3px solid #ffc83d; border-radius: 20px; box-shadow: 0 4px 0 #d99a00; }
+.ev-prize-line .ev-chip { font: 17px/1.2 var(--game); }
+.ev-prize-line .ev-chip-boost { font: 600 14px/1.2 system-ui; }
+.ev-prizes canvas.art, .ev-step canvas.art, .ev-row canvas.art { flex: none; filter: drop-shadow(0 2px 2px rgba(40, 10, 60, .3)); }
+.show-sheet .ev-track { height: 26px; border-radius: 14px; background: #2a1f48; border: 3px solid #ffc83d; box-shadow: inset 0 3px 5px rgba(0, 0, 0, .5); }
+.show-sheet .ev-fill { border-radius: 10px; background: linear-gradient(rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 45%), var(--c); min-width: 6px; }
+.show-sheet .ev-progress-num, .show-sheet .ev-pot-num { font: 20px/1 var(--game); color: var(--d); }
+.show-sheet .ev-pot-bar { margin: 16px 22px 12px; }
+.show-sheet .ev-pot-chest { width: 44px; height: 44px; border: 0; background: none; }
+.show-sheet .ev-pot-chest.open { background: none; }
+.show-sheet .ev-steps, .show-sheet .ev-rows { border: 0; background: none; display: flex; flex-direction: column; gap: 8px; }
+.show-sheet .ev-step, .show-sheet .ev-row { border: 2px solid #dbe3f4 !important; border-radius: 16px; background: #fff; box-shadow: 0 3px 0 #dbe3f4; min-height: 50px; }
+.show-sheet .ev-step.current { border-color: var(--c) !important; box-shadow: 0 3px 0 var(--c); }
+.show-sheet .ev-step.grand { background: linear-gradient(#fffbe6, #ffe9a8); border-color: #ffc83d !important; box-shadow: 0 3px 0 #d99a00; }
+.show-sheet .ev-step.done { background: #e6f7ec; }
+.show-sheet .ev-step-mark { width: 34px; height: 34px; border-radius: 50%; font: 18px/33px var(--game); background: #e4e9f6; color: #56618a; }
+.show-sheet .ev-step.current .ev-step-mark { background: var(--c); color: #fff; }
+.show-sheet .ev-step.done .ev-step-mark { background: #0b8a48; color: #fff; }
+.show-sheet .ev-step-need, .show-sheet .ev-name { font-family: var(--game); font-size: 17px; font-weight: 400; }
+.show-sheet .ev-row { grid-template-columns: 34px 34px minmax(0, 1fr) auto auto; }
+.show-sheet .ev-place { font: 20px/1 var(--game); color: #56618a; }
+.show-sheet .ev-score { font: 21px/1 var(--game); color: var(--d); }
+.show-sheet .ev-row.you { background: linear-gradient(#e2fbe9, #bdf0cc); border-color: #0b8a48 !important; box-shadow: 0 3px 0 #0b8a48; outline: 0; border-radius: 16px; z-index: 2; }
+.ev-face { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 18px/1 var(--game); background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 45%), var(--c); border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(34, 26, 58, .35); }
+
+.podium { display: grid; grid-template-columns: 1fr 1.12fr 1fr; align-items: end; gap: 6px; padding: 4px 2px 0; }
+.podium-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.podium-col .ev-face { width: 46px; height: 46px; font-size: 24px; }
+.podium-col canvas.art { filter: drop-shadow(0 2px 2px rgba(40, 10, 60, .3)); }
+.podium-name { font: 15px/1.2 var(--game); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podium-col.you .podium-name { color: #0b6b39; }
+.podium-block { width: 100%; border-radius: 14px 14px 4px 4px; padding: 8px 2px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 2px solid rgba(60, 30, 0, .35); border-bottom: 0; }
+.podium-score { font: 23px/1 var(--game); }
+.p1 .podium-block { min-height: 130px; background: linear-gradient(#fff3a8, #ffc21c); color: #5a2a00; }
+.p2 .podium-block { min-height: 108px; background: linear-gradient(#fff, #bcc8dc); color: #2c3650; }
+.p3 .podium-block { min-height: 98px; background: linear-gradient(#ffd9b4, #dd8a4c); color: #4a1c04; }
+.show-sheet .ev-lane-track { width: 30px; border-radius: 16px; background: #2a1f48; border: 3px solid #ffc83d; }
+.show-sheet .ev-lane-fill { border-radius: 12px; background: linear-gradient(90deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 60%), #7d8fc0; }
+.show-sheet .ev-lane.you .ev-lane-fill { background: linear-gradient(90deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 60%), #18c060; }
+.show-sheet .ev-lane-marker { width: 38px; height: 38px; border-radius: 50%; font: 18px/34px var(--game); border: 2px solid #fff; background: #56618a; }
+.show-sheet .ev-lane-goal { font: 16px/1.2 var(--game); color: #5a2a00; background: #ffd45e; border: 0; }
+.show-sheet .ev-lane-name { font-family: var(--game); }
+.show-sheet .ev-start.wide { font: 26px/1 var(--game); background: linear-gradient(#6fe898, #17b050 52%, #0a9a40); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 5px 0 #056a2a; border-radius: 18px; margin-top: 6px; }
+
+/* The rewards tray and the album share the new type and buttons. */
+.ev-sheet-title { font-family: var(--show); font-style: normal; font-weight: 400; }
+.ev-sheet-body > canvas.art { align-self: center; }
+.ev-claim { font: 18px/1 var(--game); background: linear-gradient(#6fe898, #17b050 52%, #0a9a40) !important; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 4px 0 #056a2a; }
+.ev-tray-item { background: linear-gradient(#fffbe6, #ffeebc); border: 3px solid #ffc83d; border-radius: 18px; box-shadow: 0 4px 0 #d99a00; }
+
+@media (max-height: 760px) {
+  .show { min-height: 0; padding: 8px 8px 10px; }
+  .show-prize { display: none; }
+  .home-mid { gap: 8px; }
+  #home-play { min-height: 58px; font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { .show.turn .show-pic, .show-go, .ev-b-start { animation: none; } }
+.home-body { padding: 10px 6px 8px; gap: 9px; }
+.ev-b-ring { inset: -3px; }
+.ev-sheet .btn.ev-x { background: #fff; color: #2a1a4a; outline: 0; }
+.ev-sheet-head .btn.ev-x { margin-left: auto; }

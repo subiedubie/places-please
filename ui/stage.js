@@ -5,7 +5,7 @@
 // No sound, no screen shake, no vibration (the owner's choice).
 // If the phone cannot do this, createStage returns null and the board is
 // drawn the old way.
-import { drawCellPicture, drawTray } from './render.js';
+import { drawCellPicture, drawTray, curtainGroups, curtainMeterBox, drawCurtainMeter } from './render.js';
 import { fx } from './fx.js';
 
 // ---- Settings ----
@@ -53,7 +53,8 @@ export async function createStage(canvas, theme) {
   const clip = new PIXI.Graphics();
   const over = new PIXI.Container();    // glow in front
   const bits = new PIXI.Container();    // shards and sparkles
-  root.addChild(tray, dim, under, trails, pieces, over, bits, clip);
+  const meters = new PIXI.Container();  // how many gems a curtain still wants
+  root.addChild(tray, dim, under, trails, pieces, meters, over, bits, clip);
   pieces.mask = clip;
   dim.tint = 0x0d1430;
   dim.alpha = 0;
@@ -215,6 +216,37 @@ export async function createStage(canvas, theme) {
     clip.clear().rect(layout.originX, layout.originY, layout.cell * board.cols, layout.cell * board.rows).fill(0xffffff);
   }
 
+  // The meter on each curtain. Its picture is kept until its number changes.
+  const meterPics = new Map(); // color -> { key, sprite }
+  function paintMeters() {
+    const groups = overlay && overlay.tally ? curtainGroups(board) : [];
+    const seen = new Set();
+    for (const g of groups) {
+      seen.add(g.color);
+      const s = layout.cell;
+      const at = curtainMeterBox(g);
+      const have = Math.min(g.need, overlay.tally[g.color] || 0);
+      const key = [have, g.need, at.w, s, dpr].join();
+      let m = meterPics.get(g.color);
+      if (!m) { m = { key: '', sprite: new PIXI.Sprite() }; meterPics.set(g.color, m); meters.addChild(m.sprite); }
+      if (m.key !== key) {
+        const old = m.sprite.texture;
+        const pad = s * 0.15;
+        m.sprite.texture = toTexture(at.w * s + 2 * pad, at.h * s + 2 * pad, (c) => {
+          c.translate(pad, pad);
+          drawCurtainMeter(c, g.color, have, g.need, at.w * s, at.h * s, theme);
+        });
+        if (old && old !== PIXI.Texture.EMPTY) old.destroy(true);
+        m.key = key;
+      }
+      m.sprite.visible = true;
+      m.sprite.anchor.set(0.5);
+      m.sprite.scale.set(1 / dpr);
+      m.sprite.position.set(layout.originX + at.x * s, layout.originY + at.y * s);
+    }
+    for (const [color, m] of meterPics) if (!seen.has(color)) m.sprite.visible = false;
+  }
+
   // ---- The light of a power-up going off (see effectsFor in ui/anim.js) ----
   const HUES = [0xff9a08, 0xff3b5c, 0x4d8dff, 0x2fe080, 0xb06bff];
   function drawEffect(f) {
@@ -266,6 +298,7 @@ export async function createStage(canvas, theme) {
     const s = layout.cell;
     const o = overlay || {};
     paintTray();
+    paintMeters();
     piecePool.begin();
     underPool.begin();
     overPool.begin();

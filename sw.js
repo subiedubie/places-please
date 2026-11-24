@@ -4,7 +4,7 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v16';
+const CACHE = 'places-please-v17';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
@@ -13,6 +13,10 @@ const FILES = [
   './',
   './art/atlas.js',
   './art/atlas.webp',
+  './art/fonts/lilita-one-OFL.txt',
+  './art/fonts/lilita-one.woff2',
+  './art/fonts/limelight-OFL.txt',
+  './art/fonts/limelight.woff2',
   './config/album.js',
   './config/calendar.js',
   './config/curve.js',
@@ -69,6 +73,7 @@ const FILES = [
   './ui/eventicons.js',
   './ui/events.css',
   './ui/events.js',
+  './ui/fancy.css',
   './ui/fly.js',
   './ui/fx.js',
   './ui/help.css',

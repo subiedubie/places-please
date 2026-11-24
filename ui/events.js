@@ -20,7 +20,7 @@
 import { drawPowerIcon, drawPiece } from './render.js';
 import { flyTo } from './fly.js';
 import { drawArt, hasArt } from './art.js';
-import { drawEventIcon } from './eventicons.js'; // the round picture badges
+import { drawEventIcon, eventColors } from './eventicons.js'; // the round picture badges
 import { theme } from '../config/theme.js';
 
 // ---- Words and numbers you may want to change ----
@@ -77,14 +77,15 @@ const SHORT_NAMES = {
 
 const BADGE_PX = 60;                 // how wide a badge picture is on Home at most (and how sharply it is drawn)
 const BADGE_MIN_PX = 40;             // the smallest it may shrink to on a short screen
-const PILL_PX = 18;                  // the timer pill under a badge, with its small gap (see .ev-b-time)
+const PILL_PX = 27;                  // the timer pill under a badge, with its small gap (see .ev-b-time)
 const GAP_MIN_PX = 4;                // the least and the most room between two badges in a column
 const GAP_MAX_PX = 28;
 const GAIN_START_MS = 450;           // after a level: the wait before the first "+3" pops in
 const GAIN_STEP_MS = 150;            // ...and the wait between one badge's "+3" and the next
 const GAIN_FLOAT_MS = 1500;          // how long a "+3" floats (keep the same as ev-plus in ui/events.css)
-const HERO_PX = 88;                  // how wide it is at the top of a detail sheet
+const HERO_PX = 116;                  // how wide it is at the top of a detail sheet
 const REFRESH_MS = 20 * 1000;        // how often standings are asked for again
+const SHOW_MS = 6000;                // how long one competition stays on the marquee
 const GOLD = '#e0a100';
 const GOLD_DARK = '#a87400';
 const STEEL = '#6f7a8c';
@@ -199,6 +200,41 @@ function icon(size, paint, label) {
 }
 
 // A rectangle with rounded corners (older phones lack ctx.roundRect).
+// A rendered picture from the atlas as an element (nothing if there is none).
+export function artPic(name, size, label) {
+  if (!hasArt(name)) return document.createElement('span');
+  const pic = icon(size, (ctx, s) => drawArt(ctx, name, s / 2, s / 2, s, s), label || '');
+  pic.classList.add('art');
+  return pic;
+}
+
+// A colored disc with the first letter of a player's name.
+const FACE_COLORS = ['#f0183c', '#1e7bff', '#06b34c', '#9a3cff', '#ff8412', '#0fb4d0', '#e0286a', '#5a6cff'];
+function face(name, you) {
+  const text = you ? 'You' : String(name || '?');
+  let n = 0;
+  for (const ch of text) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+  const el = h('span', 'ev-face', you ? '★' : text[0].toUpperCase());
+  el.style.setProperty('--c', you ? '#0b8a48' : FACE_COLORS[n % FACE_COLORS.length]);
+  return el;
+}
+
+// How far along an event is, from 0 to 1: its progress, or the player's place.
+function partOf(ev) {
+  if (ev.state === 'won') return 1;
+  if (ev.total && ev.total.need > 0) return Math.min(1, ev.total.have / ev.total.need);
+  if (ev.progress && ev.progress.need > 0) return Math.max(0, Math.min(1, ev.progress.have / ev.progress.need));
+  const rows = list(ev.rows);
+  const you = rows.find((r) => r && r.you);
+  if (you && you.place > 0 && rows.length > 1) return 1 - (you.place - 1) / (rows.length - 1);
+  return 0;
+}
+function paintColors(el, ev) {
+  const [c, d] = eventColors(ev);
+  el.style.setProperty('--c', c);
+  el.style.setProperty('--d', d);
+}
+
 function rounded(ctx, x, y, w, hgt, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -441,10 +477,13 @@ export function createEvents(session, onChange) {
     const btn = h('button', 'ev-b' + (o.cls ? ' ' + o.cls : ''));
     btn.type = 'button';
     btn.setAttribute('aria-label', o.label || o.name);
+    paintColors(btn, o.ev);
     const pic = h('span', 'ev-b-pic');
-    pic.appendChild(eventIcon(o.ev, BADGE_PX));
+    const ring = h('span', 'ev-b-ring'); // fills as the event goes on
+    ring.style.setProperty('--part', String(o.part || 0));
+    pic.append(ring, eventIcon(o.ev, BADGE_PX));
     if (o.start) pic.appendChild(h('span', 'ev-b-start', TEXT.start));
-    else if (o.bubble) pic.appendChild(h('span', 'ev-b-bubble' + (o.count ? ' count' : ''), o.bubble));
+    else if (o.bubble) pic.appendChild(h('span', 'ev-b-bubble' + (o.count ? ' count' : '') + ({ '1st': ' p1', '2nd': ' p2', '3rd': ' p3' }[o.bubble] || ''), o.bubble));
     if (o.dot) pic.appendChild(h('span', 'ev-b-dot'));
     btn.append(pic, o.time || h('span', 'ev-b-time'));
     btn.dataset.ev = String(o.ev.id); // lets the "+3" after a level find this badge
@@ -497,6 +536,7 @@ export function createEvents(session, onChange) {
       grid.appendChild(badge({
         ev: { id: 'album', type: 'album' },
         name: TEXT.album,
+      part: album.total ? album.owned / album.total : 0,
         bubble: `${shortNum(album.owned)}/${shortNum(album.total)}`,
         time: countdown(album.endsAt, '', 'ev-b-time'),
         label: `${TEXT.album}, ${num(album.owned)} of ${num(album.total)} cards`,
@@ -507,8 +547,89 @@ export function createEvents(session, onChange) {
     const events = getEvents(t);
     for (const ev of events) grid.appendChild(eventBadge(ev));
     if (!events.length) mount.appendChild(h('p', 'note ev-empty', TEXT.noEvents));
+    drawShow(events, false);
     fitBadges();
     if (round) showGains(round, events, tray.length);
+  }
+
+  // ---- The marquee: one competition at a time, in the middle of Home ----
+  let showId = null;   // the one that is up
+  let showTimer = 0;
+  // What to say about an event in one exciting line.
+  function pitch(ev) {
+    const rows = list(ev.rows);
+    const i = rows.findIndex((r) => r && r.you);
+    if (ev.state === 'offer') return 'Ready when you are';
+    if (i === 0 && rows.length > 1) return rows[0].score > 0 ? 'You are in the lead!' : 'Be the first to score';
+    if (i > 0 && !ev.total && !ev.lanes) {
+      const gap = rows[i - 1].score - rows[i].score + 1;
+      return `${num(gap)} more to pass ${rows[i - 1].name}`;
+    }
+    if (ev.total) return `${num(Math.max(0, ev.total.need - ev.total.have))} more fills the pot`;
+    if (ev.progress && ev.progress.need > 0) {
+      const left = Math.max(0, ev.progress.need - ev.progress.have);
+      return left ? `${num(left)} more to the next prize` : 'Ready to collect';
+    }
+    return ev.summary || '';
+  }
+  function drawShow(events, next) {
+    const mount = $('home-show');
+    if (!mount) return;
+    const open = events.filter((e) => !stateWord(e.state));
+    mount.hidden = !open.length;
+    if (!open.length) { mount.textContent = ''; return; }
+    let i = Math.max(0, open.findIndex((e) => e.id === showId));
+    if (next) i = (i + 1) % open.length;
+    const ev = getDetail(open[i].id, now()) || open[i];
+    const fresh = showId !== ev.id;
+    showId = ev.id;
+    mount.textContent = '';
+    const card = h('button', 'show' + (fresh ? ' turn' : ''));
+    card.type = 'button';
+    paintColors(card, ev);
+    card.setAttribute('aria-label', [ev.title, ev.summary].filter(Boolean).join(', '));
+    card.onclick = () => openDetail(ev.id);
+    const pic = h('span', 'show-pic');
+    pic.appendChild(icon(92, (ctx, s) => drawEventIcon(ctx, ev, s, theme), ''));
+    card.append(h('span', 'show-rays'), h('span', 'show-name', ev.title || 'Event'), pic);
+    const say = bubbleText(ev);
+    if (ev.state === 'offer') card.appendChild(h('span', 'show-go', TEXT.start));
+    else if (say) card.appendChild(h('span', 'show-big', say));
+    if (ev.state !== 'offer' && (ev.progress || ev.total)) {
+      const track = h('span', 'show-track');
+      const fill = h('span', 'show-fill');
+      fill.style.width = (partOf(ev) * 100).toFixed(1) + '%';
+      track.appendChild(fill);
+      card.appendChild(track);
+    }
+    card.appendChild(h('span', 'show-line', pitch(ev)));
+    const prize = list(ev.prizes)[0] && list(ev.prizes)[0].reward;
+    const step = list(ev.steps).find((x) => x.current);
+    const win = prize || (step && step.reward);
+    if (win) {
+      const row = h('span', 'show-prize');
+      row.appendChild(renderReward(win, 22));
+      card.appendChild(row);
+    }
+    if (ev.endsAt !== null && ev.endsAt !== undefined) card.appendChild(countdown(ev.endsAt, '', 'show-time'));
+    mount.appendChild(card);
+    const dots = h('div', 'show-dots');
+    open.forEach((e, n) => {
+      const d = h('button', 'show-dot' + (n === i ? ' on' : ''));
+      d.type = 'button';
+      d.setAttribute('aria-label', e.title || 'Event');
+      d.onclick = () => { showId = e.id; drawShow(getEvents(now()), false); };
+      dots.appendChild(d);
+    });
+    mount.appendChild(dots);
+    clearTimeout(showTimer);
+    if (open.length > 1) {
+      showTimer = setTimeout(() => {
+        const home = $('screen-home');
+        if (home && !home.hidden && (!back || back.hidden)) drawShow(getEvents(now()), true);
+        else showId = ev.id;
+      }, SHOW_MS);
+    }
   }
 
   // Choose the badge size and the gap between badges so that the longer
@@ -640,6 +761,7 @@ export function createEvents(session, onChange) {
       ev,
       cls: ev.state && ev.state !== 'running' ? ev.state : '',
       name: shortName(ev),
+      part: partOf(ev),
       start: ev.state === 'offer',
       bubble: finished || bubbleText(ev),
       dot: !!finished || !!ev.claimable, // just finished, or something to collect
@@ -682,7 +804,8 @@ export function createEvents(session, onChange) {
     sheetBack.type = 'button';
     sheetBack.onclick = () => { if (view && view.onBack) view.onBack(); };
     sheetTitle = h('h2', 'title small ev-sheet-title');
-    const close = h('button', 'btn quiet ev-head-btn', 'Close');
+    const close = h('button', 'btn quiet ev-head-btn ev-x', '✕');
+    close.setAttribute('aria-label', 'Close');
     close.type = 'button';
     close.onclick = closeSheet;
     head.append(sheetBack, sheetTitle, close);
@@ -712,6 +835,7 @@ export function createEvents(session, onChange) {
     if (!view || !sheetBody) return;
     const top = first ? 0 : sheetBody.scrollTop;
     sheetBody.textContent = '';
+    sheet.className = 'ev-sheet ' + (view.cls || '');
     const title = safe(() => view.render(sheetBody, now(), first), 'Event');
     // An event's sheet shows its title beside its big badge instead (see
     // openDetail), so the bar at the top is left blank for it.
@@ -750,11 +874,14 @@ export function createEvents(session, onChange) {
   // bottom (or top) edge of the sheet while it would otherwise be off screen.
   function rowsList(ev) {
     const box = h('div', 'ev-rows');
+    const podium = list(ev.rows).length >= 3 && ev.type !== 'company';
     list(ev.rows).forEach((r, i) => {
       const place = r.place || i + 1;
+      if (podium && i < 3) return; // they stand on the podium
       const row = h('div', 'ev-row' + (r.you ? ' you' : '') + (place <= 3 ? ' top' : ''));
-      row.appendChild(h('span', 'ev-place', place));
-      row.appendChild(h('span', 'ev-name', r.you ? `${r.name || 'You'} (you)` : r.name));
+      row.appendChild(place <= 3 ? artPic('medal-' + place, 34, ordinal(place)) : h('span', 'ev-place', place));
+      row.appendChild(face(r.name, r.you));
+      row.appendChild(h('span', 'ev-name', r.you ? 'You' : r.name));
       row.appendChild(h('span', 'ev-score', num(r.score)));
       const prize = prizeFor(ev, { ...r, place });
       const cell = h('span', 'ev-prize');
@@ -765,6 +892,25 @@ export function createEvents(session, onChange) {
     return box;
   }
 
+  // The first three on their podium: second, first, third.
+  function podiumBox(ev) {
+    const rows = list(ev.rows);
+    const box = h('div', 'podium');
+    for (const i of [1, 0, 2]) {
+      const r = rows[i];
+      const col = h('div', 'podium-col p' + (i + 1) + (r.you ? ' you' : ''));
+      if (i === 0) col.appendChild(artPic('crown', 42));
+      col.append(face(r.name, r.you), h('span', 'podium-name', r.you ? 'You' : r.name));
+      const block = h('div', 'podium-block');
+      block.append(artPic('medal-' + (i + 1), 46, ordinal(i + 1)), h('span', 'podium-score', num(r.score)));
+      const prize = prizeFor(ev, { ...r, place: i + 1 });
+      if (prize && prize.coins) block.appendChild(renderReward({ coins: prize.coins }, 18));
+      col.appendChild(block);
+      box.appendChild(col);
+    }
+    return box;
+  }
+
   // The step list of a ladder, quota, season or mission track.
   function stepsList(ev) {
     const steps = list(ev.steps);
@@ -772,11 +918,11 @@ export function createEvents(session, onChange) {
     steps.forEach((s, i) => {
       const last = i === steps.length - 1 && steps.length > 1;
       const row = h('div', 'ev-step' + (s.done ? ' done' : '') + (s.current ? ' current' : '') + (last ? ' grand' : ''));
-      row.appendChild(h('span', 'ev-step-mark', s.done ? '✓' : i + 1));
+      row.appendChild(last ? artPic(s.done ? 'chest-open' : 'chest', 46) : h('span', 'ev-step-mark', s.done ? '✓' : i + 1));
       const mid = h('span', 'ev-step-need');
       mid.appendChild(h('span', '', last ? TEXT.grand : `Step ${i + 1}`));
       if (s.need !== undefined && s.need !== null && typeof s.need !== 'object') {
-        mid.appendChild(h('span', 'ev-dim', ' · ' + num(s.need)));
+        mid.appendChild(h('span', 'ev-dim', ' needs ' + num(s.need)));
       }
       row.append(mid, renderReward(s.reward, 20));
       box.appendChild(row);
@@ -819,7 +965,8 @@ export function createEvents(session, onChange) {
     track.appendChild(fill);
     wrap.appendChild(track);
     for (const c of chests) {
-      const mark = h('div', 'ev-pot-chest' + (c.open ? ' open' : ''), c.open ? '✓' : '');
+      const mark = h('div', 'ev-pot-chest' + (c.open ? ' open' : ''));
+      mark.appendChild(artPic(c.open ? 'chest-open' : 'chest', 44));
       mark.style.left = (Math.max(0, Math.min(1, (c.at || 0) / scale)) * 100).toFixed(1) + '%';
       mark.title = `Chest at ${num(c.at)}`;
       wrap.appendChild(mark);
@@ -828,10 +975,10 @@ export function createEvents(session, onChange) {
     const rows = h('div', 'ev-steps');
     chests.forEach((c, i) => {
       const row = h('div', 'ev-step' + (c.open ? ' done' : ''));
-      row.appendChild(h('span', 'ev-step-mark', c.open ? '✓' : i + 1));
+      row.appendChild(artPic(c.open ? 'chest-open' : 'chest', 44));
       const mid = h('span', 'ev-step-need');
       mid.appendChild(h('span', '', `Chest at ${num(c.at)}`));
-      mid.appendChild(h('span', 'ev-dim', c.open ? ' · open' : ''));
+      mid.appendChild(h('span', 'ev-dim', c.open ? ' open' : ''));
       row.append(mid, renderReward(c.reward, 20));
       rows.appendChild(row);
     });
@@ -848,7 +995,10 @@ export function createEvents(session, onChange) {
     for (const p of prizes.slice(0, 3)) {
       const line = h('div', 'ev-prize-line');
       const place = p.place;
-      line.appendChild(h('span', 'ev-prize-place', typeof place === 'number' ? ordinal(place) : (place || '')));
+      const one = prizes.length === 1;
+      if (one) line.appendChild(artPic('chest', 54));
+      else if (place >= 1 && place <= 3) line.appendChild(artPic('medal-' + place, 44, ordinal(place)));
+      else line.appendChild(h('span', 'ev-prize-place', typeof place === 'number' ? ordinal(place) : (place || '')));
       line.appendChild(renderReward(p.reward, 24));
       box.appendChild(line);
     }
@@ -860,7 +1010,8 @@ export function createEvents(session, onChange) {
   // chests), so every type in docs/EVENTS.md is covered by the same code.
   function openDetail(id) {
     openSheet({
-      titleInBody: true, // the title is written beside the badge, not in the top bar
+      titleInBody: true, // the title is written under the badge, not in the top bar
+      cls: 'show-sheet',
       render(body, t) {
         const ev = getDetail(id, t);
         if (!ev) {
@@ -870,11 +1021,12 @@ export function createEvents(session, onChange) {
         // Top: the big badge with the title and what the event is, then how
         // long is left, and Start if it is on offer.
         const top = h('div', 'ev-top');
+        paintColors(sheet, ev);
         const hero = h('div', 'ev-hero');
         const words = h('div', 'ev-hero-text');
         words.appendChild(h('h2', 'ev-hero-title', ev.title || 'Event'));
         if (ev.blurb) words.appendChild(h('p', 'note', ev.blurb));
-        hero.append(eventIcon(ev, HERO_PX), words);
+        hero.append(h('span', 'show-rays'), eventIcon(ev, HERO_PX), words);
         top.appendChild(hero);
         const meta = h('div', 'ev-meta');
         const word = stateWord(ev.state);
@@ -919,6 +1071,7 @@ export function createEvents(session, onChange) {
         }
         if (list(ev.rows).length) {
           body.appendChild(heading(ev.type === 'company' ? 'Members' : 'Standings'));
+          if (list(ev.rows).length >= 3 && ev.type !== 'company') body.appendChild(podiumBox(ev));
           body.appendChild(rowsList(ev));
         }
         return ev.title || 'Event';
@@ -940,6 +1093,7 @@ export function createEvents(session, onChange) {
           body.appendChild(h('p', 'note ev-empty', TEXT.trayEmpty));
           return TEXT.rewards;
         }
+        body.appendChild(artPic('chest-open', 96));
         body.appendChild(h('p', 'note', TEXT.trayNote));
         for (const item of items) {
           const card = h('div', 'card ev-tray-item');

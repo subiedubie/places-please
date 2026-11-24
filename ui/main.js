@@ -8,7 +8,7 @@
 import { createSession } from '../meta/session.js';
 import { cloneBoard, get } from '../engine/board.js';
 import { theme } from '../config/theme.js';
-import { fitCanvas, layoutFor, drawBoard, drawTargetIcon } from './render.js';
+import { curtainGroups, curtainMeterBox, drawCurtainMeter, fitCanvas, layoutFor, drawBoard, drawTargetIcon } from './render.js';
 import { attachInput } from './input.js';
 import { playEvents, playSwap, wait } from './anim.js';
 import { createScreens } from './screens.js';
@@ -86,8 +86,19 @@ function drawFrame(board, overlay) {
   // superPrism: Magic Balls are drawn in their Super form on a Super level.
   const extra = { ...(overlay || {}), superPrism: !!(session.game && session.game.superPrism) };
   if (pressed && (!busy || open)) extra.pressed = pressed;
+  extra.tally = shownTally; // what the curtain meters count
   if (stage) stage.draw(board, layout, extra);
-  else drawBoard(ctx, board, layout, theme, extra);
+  else {
+    drawBoard(ctx, board, layout, theme, extra);
+    for (const g of curtainGroups(board)) {
+      const at = curtainMeterBox(g);
+      const c = layout.cell;
+      ctx.save();
+      ctx.translate(layout.originX + (at.x - at.w / 2) * c, layout.originY + (at.y - at.h / 2) * c);
+      drawCurtainMeter(ctx, g.color, Math.min(g.need, shownTally[g.color] || 0), g.need, at.w * c, at.h * c, theme);
+      ctx.restore();
+    }
+  }
 }
 
 // Measure the canvas again (first showing, phone rotated, window resized).
@@ -150,6 +161,7 @@ function endLevel(settle) {
 function goLevel() {
   const game = session.startLevel(); // carries on a level in progress if there is one
   shown = cloneBoard(game.board);
+  rememberTargets();
   busy = false;
   pressed = null;
   onLevel = true;
@@ -288,7 +300,9 @@ async function handleAction(action) {
 // The target counts as last shown, so they change only when the pieces have
 // finished clearing on screen (the moves number changes straight away).
 let shownTargets = [];
+var shownTally = []; // gems cleared so far, per color (var: drawFrame above may run first)
 function rememberTargets() {
+  shownTally = [...session.game.tally.cleared];
   shownTargets = session.game.targets.map((t) => ({ ...t }));
 }
 
@@ -296,6 +310,7 @@ function rememberTargets() {
 // up to its count at the top of the screen.
 fx.collect = (x, y, cell) => {
   if (!onLevel || !layout) return;
+  if (cell.t === 'piece') shownTally[cell.color] = (shownTally[cell.color] || 0) + 1;
   const i = shownTargets.findIndex((t) => t.have < t.need
     && (cell.t === 'piece' ? t.color === cell.color || (cell.fuse !== undefined && t.block === 'propbomb') || (cell.mimic && t.block === 'chameleon') : t.block === cell.kind));
   const chip = i >= 0 ? $('hud-targets').children[i] : null;

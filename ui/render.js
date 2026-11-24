@@ -1875,3 +1875,68 @@ function drawFx(ctx, list, layout, board, theme, under) {
     ctx.restore();
   }
 }
+
+// ---- The curtain meter: how many more of its color open a curtain ----
+
+// Every curtain on the board, one entry per color: the box of cells it covers.
+export function curtainGroups(board) {
+  const groups = new Map();
+  for (let y = 0; y < board.rows; y++) {
+    for (let x = 0; x < board.cols; x++) {
+      const c = board.cells[y * board.cols + x];
+      if (!c || c.t !== 'block' || c.kind !== 'curtain') continue;
+      const g = groups.get(c.color) || { color: c.color, need: c.need, x0: x, x1: x, y0: y, y1: y };
+      g.x0 = Math.min(g.x0, x); g.x1 = Math.max(g.x1, x);
+      g.y0 = Math.min(g.y0, y); g.y1 = Math.max(g.y1, y);
+      groups.set(c.color, g);
+    }
+  }
+  return [...groups.values()];
+}
+
+// One meter in a box w x h at (0, 0): the gem, a bar that fills, and the
+// number of gems still to clear.
+export function drawCurtainMeter(ctx, color, have, need, w, h, theme) {
+  const left = Math.max(0, need - have);
+  const part = need > 0 ? Math.min(1, have / need) : 1;
+  const info = theme.pieces[color] || { color: '#c62f2f' };
+  const r = h / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(10, 10, 40, 0.55)';
+  ctx.shadowBlur = h * 0.16;
+  ctx.shadowOffsetY = h * 0.06;
+  roundRect(ctx, 0, 0, w, h, r);
+  ctx.fillStyle = '#ffc83d';
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  const b = h * 0.07;
+  roundRect(ctx, b, b, w - 2 * b, h - 2 * b, r - b);
+  ctx.fillStyle = '#221a3a';
+  ctx.fill();
+  ctx.clip();
+  const x0 = h * 0.92; // the bar starts where the gem ends
+  ctx.fillStyle = info.color;
+  ctx.fillRect(0, b, x0 + (w - x0) * part, h - 2 * b);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.fillRect(0, b, x0 + (w - x0) * part, h * 0.28);
+  ctx.restore();
+  drawPiece(ctx, color, h * 0.52, h * 0.5, h * 0.86, theme);
+  ctx.save();
+  ctx.font = `${Math.round(h * 0.56)}px "Lilita One", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = h * 0.13;
+  ctx.strokeStyle = '#221a3a';
+  ctx.fillStyle = '#ffffff';
+  const tx = h * 0.96 + (w - h * 1.1) / 2;
+  ctx.strokeText(String(left), tx, h * 0.53);
+  ctx.fillText(String(left), tx, h * 0.53);
+  ctx.restore();
+}
+
+// Where a group's meter goes, in cells: its middle and its size.
+export function curtainMeterBox(g) {
+  const cols = g.x1 - g.x0 + 1;
+  return { x: (g.x0 + g.x1 + 1) / 2, y: (g.y0 + g.y1 + 1) / 2, w: Math.min(2.6, Math.max(1.5, cols - 0.3)), h: 0.82 };
+}

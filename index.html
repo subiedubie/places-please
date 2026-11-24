@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="ui/events.css">
   <link rel="stylesheet" href="ui/help.css">
   <link rel="stylesheet" href="ui/shop.css">
+  <link rel="stylesheet" href="ui/fancy.css">
 </head>
 <body>
 <div id="app">
@@ -32,7 +33,7 @@
       <!-- The title. Right after a level, the round banner sits here instead
            (same box, so nothing below it moves). -->
       <header class="home-top">
-        <h1 id="home-title" class="title">Places, Please</h1>
+        <h1 id="home-title" class="title marquee">Places, Please</h1>
         <div id="home-round" class="home-round" hidden>
           <div class="home-round-text">
             <div id="home-round-title" class="home-round-title"></div>
@@ -42,7 +43,9 @@
           <button id="home-round-details" class="home-round-details" type="button">details</button>
         </div>
       </header>
-      <div class="card">
+      <!-- The competition on the marquee (filled by ui/events.js). -->
+      <div id="home-show"></div>
+      <div class="card level-card">
         <div id="home-tier" class="label"></div>
         <div id="home-level" class="big"></div>
       </div>

@@ -1,38 +1,88 @@
-/* The Box Office (ui/shop.js). */
-.coins-card { align-items: center; }
-.home-shop {
-  position: relative; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px 0 6px;
-  border: 0; border-radius: 14px; background: #ffd45e; color: #5b3500; font: inherit; font-weight: 700; cursor: pointer;
-  box-shadow: 0 3px 0 #d99a00;
+/* The Box Office (ui/shop.js): a stall with a striped awning. */
+.shop-dot { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; background: #f0183c; border: 2px solid #fff; }
+
+.ev-sheet.shop-sheet { background: linear-gradient(#fff4fb, #e9f1ff 60%, #fff); max-height: 96%; overflow: hidden; }
+.shop-sheet .ev-sheet-head { position: absolute; top: 0; right: 0; z-index: 3; border: 0; display: block; }
+.shop-sheet .ev-sheet-title, .shop-sheet .ev-sheet-head > :first-child { display: none; }
+.shop-sheet .ev-sheet-body { padding: 0 12px 24px; gap: 0; }
+
+/* The stall front: red and white stripes ending in a scalloped hem. */
+.shop-front {
+  position: relative; margin: 0 -12px; padding: 18px 60px 40px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: repeating-linear-gradient(90deg, #f0283c 0 39px, #fff 39px 78px);
+  -webkit-mask: radial-gradient(circle 19.5px at 50% calc(100% - 19.5px), #000 98%, #0000) 0 0 / 39px 100%, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 19.5px) no-repeat;
+  mask: radial-gradient(circle 19.5px at 50% calc(100% - 19.5px), #000 98%, #0000) 0 0 / 39px 100%, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 19.5px) no-repeat;
 }
-.home-shop:active { transform: translateY(2px); box-shadow: 0 1px 0 #d99a00; }
-.shop-dot { position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
-.shop-purse { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.shop-coins { font-size: 28px; font-weight: 800; }
-.shop-note { margin: 4px 0 0; text-align: center; font-weight: 600; color: #0b6a3a; }
-.shop-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.shop-front::before { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(60, 0, 20, .28), rgba(255, 255, 255, .25) 40%, rgba(60, 0, 20, .22)); }
+.shop-sign { position: relative; font-size: 28px; }
+.shop-purse {
+  position: relative; display: flex; align-items: center; gap: 6px; padding: 2px 18px 2px 8px; border-radius: 24px;
+  background: #221a3a; border: 3px solid #ffc83d; color: #fff; box-shadow: 0 3px 0 rgba(60, 0, 20, .4);
+}
+.shop-coins { font: 26px/1.2 var(--game); }
+.shop-note { margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; text-align: center; font-weight: 700; background: #0b8a48; color: #fff; }
+
+.shop-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
 .shop-feature {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; text-align: center;
-  border-radius: 16px; background: #e4f6ea; border: 2px solid #7fcf9c;
+  --c: #35d07c; --d: #04703a;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 8px 10px; text-align: center;
+  border-radius: 22px; border: 4px solid #ffc83d; color: #fff;
+  background: radial-gradient(circle at 50% 38%, var(--c), var(--d));
+  box-shadow: inset 0 0 0 2px rgba(90, 40, 0, .55), 0 5px 0 #b87400, 0 10px 16px rgba(30, 20, 60, .25);
 }
-.shop-feature.deal { background: #fff3d1; border-color: #f0bf4c; }
-.shop-feature > .shop-buy { margin-top: auto; }
-.shop-was { color: var(--dim); font-size: 14px; }
-.shop-shelf { margin-top: 18px; }
-.shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.shop-feature.deal { --c: #ff5a8a; --d: #9a0644; }
+.shop-feature .ev-reward { justify-content: center; position: relative; }
+.shop-feature .shop-buy { margin-top: auto; position: relative; }
+.shop-feature .shop-name { position: relative; }
+.shop-tag {
+  position: absolute; z-index: 1; top: -14px; padding: 3px 14px 4px; border-radius: 14px; white-space: nowrap;
+  background: linear-gradient(#fff0a0, #ffc21c); color: #5a2a00; font: 16px/1.2 var(--game); border: 2px solid #8a4a00;
+}
+.shop-feature.gift.ready .shop-pic canvas { animation: shop-hop 2.4s ease-in-out infinite; }
+@keyframes shop-hop { 0%, 60%, 100% { transform: none; } 68% { transform: translateY(-9px) rotate(-5deg); } 76% { transform: none; } 83% { transform: translateY(-5px) rotate(4deg); } 90% { transform: none; } }
+.shop-burst {
+  position: absolute; right: -4px; top: 14px; width: 62px; height: 62px; display: grid; place-items: center; transform: rotate(12deg);
+  font: 16px/.95 var(--game); white-space: pre; color: #5a2a00; text-align: center; background: #ffe14a;
+  clip-path: polygon(50% 0, 60% 14%, 75% 6%, 78% 22%, 95% 25%, 88% 40%, 100% 50%, 88% 60%, 95% 75%, 78% 78%, 75% 94%, 60% 86%, 50% 100%, 40% 86%, 25% 94%, 22% 78%, 5% 75%, 12% 60%, 0 50%, 12% 40%, 5% 25%, 22% 22%, 25% 6%, 40% 14%);
+}
+
+.shop-section { margin-top: 24px; }
+.shop-shelf {
+  margin: 0 auto 10px; width: max-content; padding: 4px 22px 6px; font: 19px/1.2 var(--game); color: #fff;
+  background: var(--d); clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 50%, 100% 100%, 0 100%, 9px 50%);
+}
+.shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .shop-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shop-grid.one { grid-template-columns: 1fr; }
 .shop-item {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; text-align: center;
-  border-radius: 16px; background: #fff; border: 1.5px solid var(--line);
+  position: relative; display: flex; flex-direction: column; padding: 4px; border-radius: 20px; text-align: center;
+  background: #fff; border: 3px solid var(--d); box-shadow: 0 4px 0 var(--d), 0 9px 14px rgba(30, 20, 60, .18);
 }
-.shop-item > .shop-buy { margin-top: auto; }
-.shop-pic { position: relative; min-height: 54px; }
-.shop-owned {
-  position: absolute; right: -10px; bottom: -2px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
-  background: #1b2030; color: #fff; font-size: 13px; font-weight: 700; line-height: 22px;
+.shop-item.wide { flex-direction: row; text-align: left; }
+.shop-item .shop-pic { border-radius: 14px; background: radial-gradient(circle at 50% 40%, #fff, var(--c) 78%); overflow: hidden; }
+.shop-item.wide .shop-pic { flex: none; width: 124px; }
+.shop-pic { position: relative; display: grid; place-items: center; padding: 8px 4px; }
+.shop-pic canvas { position: relative; display: block; filter: drop-shadow(0 4px 3px rgba(40, 10, 60, .35)); }
+.shop-feature .shop-pic { padding: 0; }
+.shop-side { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 6px 4px 4px; }
+.shop-item.wide .shop-side { padding: 6px 8px 6px 12px; }
+.shop-side .ev-reward { justify-content: center; }
+.shop-item.wide .ev-reward { justify-content: flex-start; }
+.shop-owned { position: absolute; right: 5px; bottom: 4px; padding: 1px 8px; border-radius: 10px; background: #221a3a; color: #fff; font: 13px/1.4 var(--game); }
+.shop-name { font: 17px/1.2 var(--game); color: #2a1a4a; }
+.shop-item.wide .shop-name { font-size: 21px; }
+.shop-feature .shop-name { color: #fff; }
+.shop-name s { font-size: 14px; opacity: .8; }
+.shop-buy {
+  appearance: none; -webkit-appearance: none; width: 100%; min-height: 44px; margin-top: auto; padding: 0 6px 2px; border: 0; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 5px; color: #fff; font: 21px/1 var(--game); touch-action: manipulation; cursor: pointer;
+  background: linear-gradient(#5fe08a, #17b050 52%, #0a9a40); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 4px 0 #056a2a; text-shadow: 0 2px 0 rgba(0, 60, 20, .55);
 }
-.shop-name { font-weight: 700; }
-.shop-item .ev-reward, .shop-feature .ev-reward { justify-content: center; }
-.shop-buy { width: 100%; min-height: 44px; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 16px; }
-.shop-buy.free { background: #0b8a48; }
-.shop-buy:disabled { opacity: .4; }
+.shop-buy:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .4), 0 1px 0 #056a2a; }
+.shop-buy.free { background: linear-gradient(#ffe680, #ffc21c 52%, #f0a000); color: #5a2a00; text-shadow: 0 1px 0 #fff3b8; box-shadow: inset 0 2px 0 #fff8d0, 0 4px 0 #a86400; }
+.shop-buy:disabled { background: #c3cad6; color: #fff; box-shadow: 0 4px 0 #97a1b3; text-shadow: 0 1px 0 #7c869a; }
+.shop-buy:disabled canvas { filter: grayscale(.6); }
+.shop-buy:focus-visible { outline: 3px solid #221a3a; outline-offset: 2px; }
+.shop-item.bought { animation: shop-bought .5s ease-out; }
+@keyframes shop-bought { 30% { transform: scale(1.06); box-shadow: 0 4px 0 var(--d), 0 0 0 8px rgba(255, 200, 61, .7); } }
+@media (prefers-reduced-motion: reduce) { .shop-feature.gift.ready .shop-pic canvas, .shop-item.bought { animation: none; } }

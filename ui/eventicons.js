@@ -652,6 +652,20 @@ const OVERLAYS = {
   },
 };
 
+// The two strong colors of an event's badge, for its sheet and the marquee.
+// (The same enamel colors as in tools/art/badges.py; pale ones are deepened.)
+const SHOW_COLORS = {
+  trophy: ['#ff4038', '#8a0a18'], trophyFlame: ['#e0185c', '#560024'], laurel: ['#5a6cff', '#1e2a9a'],
+  clapper: ['#ff8412', '#9a4200'], chest: ['#14b45c', '#04582a'], crown: ['#8a2cf0', '#3c0a86'],
+  ghostlight: ['#3a62b4', '#0a1638'], stopwatch: ['#1f9cf0', '#0a4c94'], flag: ['#10bf96', '#04705c'],
+  ladder: ['#f08a24', '#8a3c0a'], masks: ['#ff4fa0', '#9a0a5c'], ticket: ['#0fb4d0', '#04688a'],
+  clipboard: ['#6fb010', '#386400'], gift: ['#a45cf0', '#5a1ea8'], present: ['#f0a800', '#8a5200'],
+  booklet: ['#1c62f0', '#06247c'], star: ['#6a86b8', '#2c4068'],
+};
+export function eventColors(event) {
+  return SHOW_COLORS[eventPicture(event)] || SHOW_COLORS.star;
+}
+
 // ---- The one function the screens call ----
 
 // The event's name in config/events.js. A running event's id looks like
