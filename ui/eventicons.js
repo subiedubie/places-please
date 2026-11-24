@@ -1,4 +1,6 @@
-// EVENT ICONS: the round picture badge of each side game, drawn in code.
+// EVENT ICONS: the round picture badge of each side game. The badges are
+// rendered pictures ('badge-trophy' and so on in art/, made by
+// tools/art/badges.py); the drawings below stand in when one is missing.
 //
 //   drawEventIcon(ctx, event, size, theme)
 //
@@ -16,6 +18,7 @@
 // all the numbers below are "out of 100": (50, 50) is the middle of the badge.
 
 import { drawPiece, drawPowerIcon } from './render.js';
+import { drawArt } from './art.js';
 import { EVENTS } from '../config/events.js';
 import { theme as defaultTheme } from '../config/theme.js';
 
@@ -627,6 +630,28 @@ const PICTURES = {
   },
 };
 
+// ---- What goes on top of a rendered badge ----
+
+// Some badges have a part that changes with the event. It is drawn over the
+// rendered picture, in the spot left clear for it (numbers out of 100).
+const OVERLAYS = {
+  // The power-up this sprint counts, at the lower right of the stopwatch.
+  stopwatch(ctx, info) {
+    const kind = info.cfg.power;
+    if (kind) powerAt(ctx, kind, 53, 53, 42, info.theme);
+  },
+
+  // What is collected, at the top of the ladder: a gem, a power-up or a star.
+  ladder(ctx, info) {
+    const collect = info.cfg.collect || {};
+    if (Number.isInteger(collect.color) && info.theme.pieces && info.theme.pieces[collect.color]) {
+      drawPiece(ctx, collect.color, 50, 27, 42, info.theme);
+    } else if (!(collect.made && powerAt(ctx, collect.made, 30, 8, 40, info.theme))) {
+      star(ctx, 50, 28, 19, GOLD, GOLD_EDGE, 2.5);
+    }
+  },
+};
+
 // ---- The one function the screens call ----
 
 // The event's name in config/events.js. A running event's id looks like
@@ -660,6 +685,20 @@ export function drawEventIcon(ctx, event, size, theme) {
     power: (event && event.power) || fromConfig.power,
     collect: (event && event.collect) || fromConfig.collect,
   };
+
+  // The rendered badge, if there is one, with the part that varies on top.
+  if (drawArt(ctx, 'badge-' + name, s / 2, s / 2, s, s)) {
+    if (!OVERLAYS[name]) return;
+    ctx.save();
+    ctx.scale(s / 100, s / 100);
+    try {
+      OVERLAYS[name](ctx, { cfg, theme: th });
+    } catch (err) {
+      console.warn('event icon:', name, err);
+    }
+    ctx.restore();
+    return;
+  }
 
   ctx.save();
   ctx.scale(s / 100, s / 100); // from here on everything is "out of 100"
