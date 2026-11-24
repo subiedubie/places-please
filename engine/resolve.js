@@ -197,7 +197,7 @@ export function refill(board, ctx) {
 // With `always` false, a first round in which nothing moved is left out of the
 // event list (used at the start of settle, where the board may hold empty
 // cells that are sealed in by blocks and cannot be filled).
-function dropAndFill(board, ctx, events, always) {
+export function dropAndFill(board, ctx, events, always) {
   for (let round = 1; ; round++) {
     const { falls, spawns } = fallUntilStuck(board, ctx);
     if (falls.length > 0 || spawns.length > 0 || (always && round === 1)) {
@@ -266,6 +266,50 @@ function powerSpot(group, origins) {
   return { x: best.x, y: best.y };
 }
 
+// Clear every one of these groups, hit the blocks next to them and place the
+// power-ups they earned. Adds what happened to `events`.
+export function clearGroups(board, ctx, groups, origins, events) {
+  // Clear every group. "was" remembers what each cell held, so the game
+  // can count cleared colors and the screen can animate them.
+  // (A fireworks blast set off by an earlier group may already have taken
+  // some of a later group's pieces; a group with nothing left is skipped.)
+  const gone = new Set();
+  for (const group of groups) {
+    const cells = group.cells
+      .map((c) => ({ x: c.x, y: c.y, was: get(board, c.x, c.y) }))
+      .filter((c) => isPiece(c.was));
+    if (cells.length === 0) {
+      gone.add(group);
+      continue;
+    }
+    for (const c of cells) set(board, c.x, c.y, EMPTY);
+    events.push({ type: 'clear', cause: 'match', color: group.color, cells });
+    // Floor under a cleared piece is removed: { type: 'floor', x, y, kind }
+    for (const c of cells) {
+      const lifted = liftFloor(board, c.x, c.y);
+      if (lifted) events.push(lifted);
+    }
+    const painted = spreadPaint(board, cells);
+    if (painted) events.push(painted);
+    // A prop bomb matched in time goes off like a Grenade, for the player.
+    for (const c of cells) {
+      if (c.was.fuse !== undefined) events.push(...blast(board, { x: c.x, y: c.y }, { rng: ctx.rng, needs: ctx.needs }));
+    }
+    // Blocks next to the group take a match hit:
+    //   { type: 'block', x, y, kind, hpLeft, destroyed, by: 'match' }
+    events.push(...hitNeighbours(board, group, ctx));
+  }
+
+  // Each group makes at most one power-up, decided by its shape.
+  for (const group of groups) {
+    const kind = powerForShape(group.shape);
+    if (kind === null || gone.has(group)) continue;
+    const at = powerSpot(group, origins);
+    set(board, at.x, at.y, power(kind));
+    events.push({ type: 'spawn-power', at, kind });
+  }
+}
+
 // settle: keep resolving the board until nothing matches.
 //   1. If anything can fall already (e.g. a power-up just fired), drop and
 //      refill first.
@@ -299,45 +343,7 @@ export function* settleSteps(board, ctx, origins = []) {
     // Every pass after the first is a cascade (chain reaction).
     if (pass > 1) events.push({ type: 'cascade', depth: pass });
 
-    // Clear every group. "was" remembers what each cell held, so the game
-    // can count cleared colors and the screen can animate them.
-    // (A fireworks blast set off by an earlier group may already have taken
-    // some of a later group's pieces; a group with nothing left is skipped.)
-    const gone = new Set();
-    for (const group of groups) {
-      const cells = group.cells
-        .map((c) => ({ x: c.x, y: c.y, was: get(board, c.x, c.y) }))
-        .filter((c) => isPiece(c.was));
-      if (cells.length === 0) {
-        gone.add(group);
-        continue;
-      }
-      for (const c of cells) set(board, c.x, c.y, EMPTY);
-      events.push({ type: 'clear', cause: 'match', color: group.color, cells });
-      // Floor under a cleared piece is removed: { type: 'floor', x, y, kind }
-      for (const c of cells) {
-        const lifted = liftFloor(board, c.x, c.y);
-        if (lifted) events.push(lifted);
-      }
-      const painted = spreadPaint(board, cells);
-      if (painted) events.push(painted);
-      // A prop bomb matched in time goes off like a Grenade, for the player.
-      for (const c of cells) {
-        if (c.was.fuse !== undefined) events.push(...blast(board, { x: c.x, y: c.y }, { rng: ctx.rng, needs: ctx.needs }));
-      }
-      // Blocks next to the group take a match hit:
-      //   { type: 'block', x, y, kind, hpLeft, destroyed, by: 'match' }
-      events.push(...hitNeighbours(board, group, ctx));
-    }
-
-    // Each group makes at most one power-up, decided by its shape.
-    for (const group of groups) {
-      const kind = powerForShape(group.shape);
-      if (kind === null || gone.has(group)) continue;
-      const at = powerSpot(group, pass === 1 ? origins : []);
-      set(board, at.x, at.y, power(kind));
-      events.push({ type: 'spawn-power', at, kind });
-    }
+    clearGroups(board, ctx, groups, pass === 1 ? origins : [], events);
 
     // A snapshot of the board with the cleared gaps and new power-ups.
     events.push({ type: 'frame', board: cloneBoard(board) });

@@ -546,7 +546,10 @@ function movesFor(tier, blocks, drops, floor, targets, curve) {
 // no twists unless options.twists is true).
 export function generateLevel(n, curve = CURVE, options = {}) {
   const level = plainLevel(n, curve, options);
-  return options.twists ?? !options.ready ? addTwists(level) : level;
+  if (options.ready && !options.twists) return level;
+  const L = addTwists(level);
+  const k = (curve.movesFactor || [])[L.tier];
+  return k && k !== 1 && !L.bonus ? { ...L, moves: Math.max(12, Math.round(L.moves * k)) } : L;
 }
 
 function plainLevel(n, curve, options) {

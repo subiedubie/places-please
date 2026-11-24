@@ -150,7 +150,7 @@ export const theme = {
   },
 
   // Difficulty tier names, easiest first.
-  tiers: ['Rehearsal', 'Preview', 'Opening Night', 'Command Performance'],
+  tiers: ['', 'Medium level', 'Hard level', 'Hard level'], // ('' = an ordinary level)
 
   // What a bonus level (every 10th level) is called, shown in place of the
   // tier name on the Home and Level screens.

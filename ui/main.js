@@ -11,6 +11,7 @@ import { theme } from '../config/theme.js';
 import { curtainGroups, curtainMeterBox, drawCurtainMeter, fitCanvas, layoutFor, drawBoard, drawTargetIcon } from './render.js';
 import { attachInput } from './input.js';
 import { playEvents, playSwap, wait } from './anim.js';
+import { createLive } from './live.js'; // several things moving at once
 import { createScreens } from './screens.js';
 import { createEvents } from './events.js';
 import { createBoosterUi } from './boosters.js';
@@ -85,7 +86,7 @@ function drawFrame(board, overlay) {
   shown = board;
   // superPrism: Magic Balls are drawn in their Super form on a Super level.
   const extra = { ...(overlay || {}), superPrism: !!(session.game && session.game.superPrism) };
-  if (pressed && (!busy || open)) extra.pressed = pressed;
+  if (pressed) extra.pressed = pressed;
   extra.tally = shownTally; // what the curtain meters count
   if (stage) stage.draw(board, layout, extra);
   else {
@@ -108,7 +109,8 @@ function refit() {
   ctx = fit.ctx || null;
   const b = session.game.board;
   layout = layoutFor(fit.w, fit.h, b.cols, b.rows);
-  drawFrame(shown || cloneBoard(b));
+  if (live.active()) live.redraw();
+  else drawFrame(shown || cloneBoard(b));
 }
 window.addEventListener('resize', refit);
 
@@ -141,20 +143,20 @@ function goHome(round) {
   ui.show('home'); // before the badges: they are sized to the height of Home
   eventUi.home(round ? { result: round.result, before: round.before } : null);
   if (round) {
-    ui.roundBanner(round.result, round.levelN,
-      () => eventUi.openRound(round.result, round.levelN, (box) => ui.coinLines(round.result, box)));
     ui.tickCoins(round.coinsBefore, save.coins);
   }
 }
 
 // A level has ended (won, lost or quit): settle it and go straight back to
 // Home, which shows what it earned. `settle` is session.finish or session.quit.
-function endLevel(settle) {
+async function endLevel(settle) {
   const levelN = session.game.level.n;
   const coinsBefore = session.save.coins;  // to count the coins card up from
   const before = eventUi.snapshot();       // what each badge showed before
   const result = settle();
   if (!result) { goHome(); return; }
+  onLevel = false;
+  await ui.finish(result, levelN, (box) => eventUi.resultsInto(box, result));
   goHome({ result, levelN, coinsBefore, before });
 }
 
@@ -163,6 +165,9 @@ function goLevel() {
   shown = cloneBoard(game.board);
   rememberTargets();
   busy = false;
+  ending = false;
+  wanted = null;
+  live.clear();
   pressed = null;
   onLevel = true;
   ui.hideRoundBanner(); // the last level's banner on Home, if it is still up
@@ -195,105 +200,120 @@ function goSettings(message) {
 
 // ---- Playing a move ----
 
-// EARLY MOVES: while a move is playing out the player may already make the
-// next one. It waits here until the pieces it needs have landed.
-let open = false;      // true while early moves are being accepted
-let wanted = null;     // { action, held } as the finger made it
-let accepted = null;   // the one that will be made when this step ends
-let landing = false;   // true while the step being played ends on a full board
+// OVERLAPPING MOVES (ui/live.js, engine/live.js): the player may move wherever
+// the gems are at rest, whatever is going on elsewhere. A move that needs gems
+// still in motion waits a moment for them.
+const WAIT_MS = 900;     // how long such a move waits before it is forgotten
+let wanted = null;       // { action, until }
+let ending = false;      // true while the end of a move is played out
 
-const sameCell = (p, q) => JSON.stringify(p) === JSON.stringify(q);
-const heldCells = (action, board) => (action.type === 'swap' ? [action.a, action.b] : [action.at]).map((p) => get(board, p.x, p.y));
+const live = createLive({
+  paint: (board, overlay) => drawFrame(board, overlay),
+  current: () => session.game.board,
+  options: () => ({ theme, speed: speed(), swapMs: 70 * speedFactor() }),
+  onEnd: () => { rememberTargets(); ui.hud({ ...session.game, targets: shownTargets }); pump(); },
+});
 
-// Can the waiting move be made on the board the pieces are landing on?
-function considerEarly() {
-  if (!wanted || accepted || !landing || !session.game) return;
-  const now = heldCells(wanted.action, session.game.board);
-  const { action, held } = wanted;
-  wanted = null;
-  if (now.every((c, i) => sameCell(c, held[i])) && session.canMove(action)) {
-    accepted = action;
-    pressed = null;
+// Make a move now if it can be made. False: it has to wait.
+function tryMove(action) {
+  const why = session.live.refusal(action, live.ready);
+  if (why === 'wait') return false;
+  if (why === 'over') return true;
+  if (why === 'no') {
+    // Not a legal move. It costs nothing; show a small "no".
+    if (live.active()) return true;
+    const b = cloneBoard(session.game.board);
+    const canSlide = (p) => { const c = p && get(b, p.x, p.y); return Boolean(c) && (c.t === 'piece' || c.t === 'power'); };
+    if (action.type === 'swap' && canSlide(action.a) && canSlide(action.b)) {
+      playSwap(b, action.a, action.b, (bd, o) => { if (!live.active()) drawFrame(bd, o); }, 70 * speedFactor(), true)
+        .then(() => { if (!live.active() && onLevel) drawFrame(cloneBoard(session.game.board)); });
+    } else shake();
+    return true;
   }
+  const before = cloneBoard(session.game.board);
+  const events = session.live.move(action, live.ready);
+  if (!events) return true;
+  busy = true;
+  pressed = null;
+  ui.hud({ ...session.game, targets: shownTargets }); // moves drop at once
+  live.play(events, before, action.type === 'swap' ? action : null);
+  return true;
 }
 
-function earlyAction(action) {
-  if (action.type !== 'swap' && action.type !== 'tap') return;
-  wanted = { action, held: heldCells(action, shown) };
-  considerEarly();
+// Something has come to rest: the waiting move, then the matches that can now
+// clear, and when all is still, the end of the move.
+async function pump() {
+  if (!onLevel || !session.game) return;
+  if (wanted && !ending) {
+    if (performance.now() > wanted.until || tryMove(wanted.action)) wanted = null;
+  }
+  const before = cloneBoard(session.game.board);
+  const chain = ending ? null : session.live.wave(live.ready);
+  if (chain) { live.play(chain, before, null); return; }
+  if (ending || live.active() || !busy || !session.live.quiet()) return;
+  ending = true;
+  let was = before;
+  try {
+    for (const step of session.live.finish()) {
+      await playEvents(step.events, drawFrame, theme, speed(), was);
+      was = cloneBoard(session.game.board);
+      rememberTargets();
+      ui.hud({ ...session.game, targets: shownTargets });
+    }
+    drawFrame(cloneBoard(session.game.board));
+    rememberTargets();
+    ui.hud(session.game);
+    await afterMove();
+  } catch (err) {
+    console.error(err);
+    if (session.game) drawFrame(cloneBoard(session.game.board));
+  } finally {
+    ending = false;
+    busy = live.active();
+  }
+  if (wanted && onLevel) pump();
+}
+
+// A move is over. Out of moves: offer more before the level is closed as a
+// loss; if the player buys them the level simply carries on.
+async function afterMove() {
+  if (session.isOver() && session.game.status === 'lost' && await boosters.outOfMoves()) {
+    ui.hud(session.game);
+  } else if (session.isOver()) {
+    await wait(350); // a moment to see the final board
+    await endLevel(() => session.finish()); // settle it, show the finish screen, go Home
+  }
 }
 
 async function handleAction(action) {
   if (!onLevel) return;
-  if (busy) { if (open) earlyAction(action); return; }
+  if (action.type === 'swap' || action.type === 'tap') {
+    if (ending || !tryMove(action)) wanted = { action, until: performance.now() + WAIT_MS };
+    return;
+  }
+  // A booster is played in one piece. 'wake' does nothing on the board: it
+  // re-opens the out-of-moves sheet (startLevel).
+  if (busy) return;
   busy = true;
-  pressed = null;
   wanted = null;
-  accepted = null;
   try {
-    const before = shown; // the board as the player sees it now
-    const swapMs = 70 * speedFactor();
-    const stepped = action.type === 'swap' || action.type === 'tap';
-    // A booster goes through the same playback as a move, in one piece. 'wake'
-    // does nothing on the board: it re-opens the out-of-moves sheet (startLevel).
-    const move = stepped ? session.startMove(action) : null;
-    let step = move ? move.next() : null;
-    const events = stepped ? (step ? step.events : [])
-      : action.type === 'booster' ? session.useBooster(action.kind, action.at) : [{ type: 'wake' }];
-    const nothingHappened = !events || (events.length === 0 && !stepped) || (events[0] && events[0].type === 'invalid');
-
-    if (nothingHappened) {
-      // Not a legal move. It costs nothing; show a small "no".
-      // Only pieces and power-ups can slide; an obstacle, a sandbag or an
-      // empty cell stays put and the board gives a small shake instead.
-      const canSlide = (p) => {
-        const c = get(before, p.x, p.y);
-        return Boolean(c) && (c.t === 'piece' || c.t === 'power');
-      };
-      if (action.type === 'swap' && canSlide(action.a) && canSlide(action.b)) {
-        await playSwap(before, action.a, action.b, drawFrame, swapMs, true);
-      } else shake();
+    const before = shown;
+    const events = action.type === 'booster' ? session.useBooster(action.kind, action.at) : [{ type: 'wake' }];
+    if (!events || events.length === 0 || events[0].type === 'invalid') {
+      shake();
       drawFrame(before);
     } else {
-      ui.hud({ ...session.game, targets: shownTargets }); // moves drop at once
-      if (action.type === 'swap') await playSwap(before, action.a, action.b, drawFrame, swapMs, false);
-      if (!stepped) await playEvents(events, drawFrame, theme, speed(), before);
-      else {
-        open = true;
-        while (step) {
-          landing = step.landed;
-          accepted = null;
-          considerEarly(); // one made a moment ago, while gems were bursting
-          await playEvents(step.events, drawFrame, theme, speed(), shown, landing ? () => accepted : null);
-          rememberTargets();
-          const early = accepted;
-          step = move.next(early || undefined);
-          ui.hud({ ...session.game, targets: shownTargets });
-        }
-        open = false;
-      }
-      // Finish on exactly what the rules say the board is now.
+      await playEvents(events, drawFrame, theme, speed(), before);
       drawFrame(cloneBoard(session.game.board));
     }
     rememberTargets();
     ui.hud(session.game);
-
-    // Out of moves: offer more moves before the level is closed as a loss.
-    // If the player buys them the level simply carries on.
-    if (session.isOver() && session.game.status === 'lost' && await boosters.outOfMoves()) {
-      ui.hud(session.game);
-    } else if (session.isOver()) {
-      await wait(350); // a moment to see the final board
-      endLevel(() => session.finish()); // settle it and go straight to Home
-    }
+    await afterMove();
   } catch (err) {
     console.error(err);
     if (session.game) drawFrame(cloneBoard(session.game.board));
   } finally {
     busy = false;
-    open = false;
-    wanted = null;
-    accepted = null;
   }
 }
 
@@ -337,10 +357,11 @@ attachInput(
   () => shown,
   handleAction,
   // (while a booster is armed, taps belong to it: see ui/boosters.js)
-  () => (busy && !open) || !onLevel || !layout || !shown || Boolean(boosters.armed()),
+  () => !onLevel || !layout || !shown || Boolean(boosters.armed()),
   (cell) => { // highlight the cell under the finger
     pressed = cell;
-    if (!busy && shown) drawFrame(shown);
+    if (live.active()) live.redraw();
+    else if (!ending && shown) drawFrame(shown);
   },
 );
 
@@ -356,7 +377,16 @@ function startLevel() {
 }
 initHelp({ session }); // the "?" and "How to play" buttons
 
-$('home-play').onclick = startLevel;
+// Play: first the level's own screen, where the starting boosters are chosen.
+// (A level already begun has had its boosters, so it goes straight on.)
+$('home-play').onclick = () => {
+  if (session.save.current) { startLevel(); return; }
+  const next = session.peekLevel();
+  ui.prelevel(next, session.save, next.bonus ? null : session.market.tierReward(next.tier), eventUi.renderReward);
+};
+$('pre-play').onclick = () => { $('prelevel').hidden = true; startLevel(); };
+$('pre-x').onclick = () => { $('prelevel').hidden = true; };
+$('prelevel').onclick = (e) => { if (e.target.id === 'prelevel') $('prelevel').hidden = true; };
 $('home-settings').onclick = () => goSettings('');
 $('results-next').onclick = startLevel;
 $('results-home').onclick = () => goHome();

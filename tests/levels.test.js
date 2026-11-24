@@ -21,12 +21,9 @@ test('generateLevel is a pure function of n', () => {
 });
 
 test('tier pattern', () => {
-  for (const n of [5, 15, 25]) assert.equal(generateLevel(n).tier, 1, `level ${n}`);
-  for (const n of [8, 18]) assert.equal(generateLevel(n).tier, 2, `level ${n}`);
-  for (const n of [23, 53]) assert.equal(generateLevel(n).tier, 3, `level ${n}`);
   for (const n of [10, 30]) assert.equal(generateLevel(n).tier, 0, `level ${n}`);
   for (let n = 1; n <= 300; n++) {
-    const expected = n % 30 === 23 ? 3 : n % 10 === 5 ? 1 : n % 10 === 8 ? 2 : 0;
+    const expected = n % 10 === 9 ? 2 : n % 10 === 3 || n % 10 === 6 ? 1 : 0; // every third level
     assert.equal(generateLevel(n).tier, expected, `level ${n}`);
   }
 });

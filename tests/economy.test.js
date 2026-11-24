@@ -26,7 +26,7 @@ test('win coins follow the tier; no leftover lines when nothing is left', () => 
   const rows = ['012', '120', '201'];
   assert.deepEqual(
     [0, 1, 2, 3].map((tier) => settleLevel(finished('won', tier, 0, rows)).coins),
-    [20, 40, 60, 100],
+    [20, 75, 150, 200],
   );
   assert.equal(settleLevel(finished('won', 0, 0, rows)).lines.length, 1);
 });

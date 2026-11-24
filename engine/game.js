@@ -152,7 +152,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
 }
 
 // What the falling-piece rule is allowed to see.
-function dropContext(game) {
+export function dropContext(game) {
   return {
     colors: game.level.colors,
     rng: game._rng,
@@ -232,7 +232,7 @@ function bump(obj, key) {
 }
 
 // Read the event list and update the targets and the running counts.
-function recordEvents(game, events) {
+export function recordEvents(game, events) {
   for (const e of events) {
     // 'transform' is a Magic Ball turning pieces into power-ups: those pieces
     // count as cleared too (the later clear only sees the power-up).
@@ -318,7 +318,7 @@ export function act(game, action) {
 
 // Carry out just the move itself: the swap, or the power-up going off.
 // Returns { events, origins }, or null if it is not allowed (nothing changed).
-function applyMove(game, action) {
+export function applyMove(game, action) {
   const board = game.board;
   const events = [];
   // superPrism: set when the level was started on a long enough win streak.
@@ -375,7 +375,7 @@ function applyMove(game, action) {
   return { events, origins };
 }
 
-const targetsMet = (game) => game.targets.every((t) => t.have >= t.need);
+export const targetsMet = (game) => game.targets.every((t) => t.have >= t.need);
 
 // Would this move be accepted right now? (Tried on a copy.)
 export function isLegal(game, action) {

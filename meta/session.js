@@ -2,6 +2,7 @@
 // and keep the save up to date after every step. The screens (ui/) call this.
 import { generateLevel } from '../levels/generate.js';
 import { newGame, act, actSteps, finishSteps, isLegal, serialize, deserialize } from '../engine/game.js';
+import { liveMove, liveRefusal, liveWave, liveQuiet } from '../engine/live.js';
 import { settleLevel } from './economy.js';
 import { ECONOMY } from '../config/economy.js';
 import { createMarket } from './market.js'; // the coin shop, and boosters earned by winning
@@ -119,6 +120,32 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
         },
       };
     },
+    // OVERLAPPING MOVES (engine/live.js). After each move, what the board will
+    // come to by itself is saved, so closing the app half way loses nothing.
+    live: {
+      refusal: (action, ready) => (session.game ? liveRefusal(session.game, action, ready) : 'over'),
+      move(action, ready) {
+        const game = session.game;
+        const events = game ? liveMove(game, action, ready) : null;
+        if (!events) return null;
+        const copy = deserialize(serialize(game));
+        for (const step of finishSteps(copy)) void step;
+        if (copy.level.bonus && copy.status === 'lost') copy.status = 'won';
+        session.save.current = serialize(copy);
+        write();
+        return events;
+      },
+      wave: (ready) => liveWave(session.game, ready),
+      quiet: () => liveQuiet(session.game),
+      // Everything is at rest: end the move. Yields the steps to play.
+      * finish() {
+        const game = session.game;
+        yield* finishSteps(game);
+        session.bonusNeverLost([]);
+        session.save.current = serialize(game);
+        write();
+      },
+    },
     // Would this be accepted as an early move right now?
     canMove: (action) => Boolean(session.game) && isLegal(session.game, action),
     doAction(action) {
@@ -225,6 +252,7 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
   const market = createMarket(getSave, rewards);
   session.market = {
     title: market.title,
+    tierReward: market.tierReward,
     view: () => market.view(now()),
     buy: (id) => saved(market.buy(id, now())),
     takeGift: () => saved(market.takeGift(now())),

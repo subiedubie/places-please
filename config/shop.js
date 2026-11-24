@@ -85,12 +85,12 @@ export const DROPS = {
     { boosters: { coinflip: 1 } },
     { boosters: { prism: 1 } },
   ],
-  // Extra for winning a harder level: [regular, hard, super hard, extremely hard].
+  // Extra for winning a harder level: [normal, medium, hard, (not used)].
   byTier: [
     null,
-    { boosters: { drill: 1 } },
-    { boosters: { stageleft: 1, coinflip: 1 } },
-    { boosters: { trapdoor: 1, drill: 1, prism: 1 } },
+    { boosters: { drill: 1, spot: 1 } },
+    { packs: 1, boosters: { stageleft: 1, show: 1, prism: 1 } },
+    { packs: 1, boosters: { trapdoor: 1, drill: 1, prism: 1 } },
   ],
   // Extra for a bonus level (every 10th).
   bonusLevel: { boosters: { stageleft: 1, trapdoor: 1, show: 1 } },

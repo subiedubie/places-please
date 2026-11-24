@@ -4,6 +4,8 @@
 // What happens when a button is pressed is decided in ui/main.js.
 
 import { drawTargetIcon, drawPowerIcon } from './render.js';
+import { drawArt } from './art.js';
+import { ECONOMY } from '../config/economy.js';
 import { nameFor } from '../config/help.js';
 import { OBSTACLES, DROPPER } from '../config/obstacles.js';
 
@@ -38,6 +40,7 @@ export function createScreens(theme) {
     const c = document.createElement('canvas');
     c.width = Math.round(size * dpr);
     c.height = Math.round(size * dpr);
+    c.style.width = c.style.height = size + 'px';
     const ctx = c.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     paint(ctx);
@@ -62,7 +65,8 @@ export function createScreens(theme) {
   // retry: true if the last try at this level was lost (the button says Retry).
   function home(save, tier, resuming, gift, retry) {
     $('home-title').textContent = theme.name;
-    $('home-tier').textContent = tierName(tier) || 'Next up';
+    $('home-tier').textContent = tierName(tier);
+    $('screen-home').dataset.tier = tier ? String(tier) : '';
     $('home-level').textContent = 'Level ' + num(save.level);
     stopCoinTick(); // a count-up still running would write over the new number
     $('home-coins').textContent = num(save.coins);
@@ -87,20 +91,9 @@ export function createScreens(theme) {
     $('home-gift-super').hidden = !superOn;
     $('home-gift').hidden = powers.length === 0 && !superOn;
 
-    // One line asking for an export if there has never been one, or the
-    // last one is more than 14 days old.
+    // A dot on Settings when the save has not been exported for a while.
     const last = save.lastExport;
-    const reminder = $('home-reminder');
-    if (!last) {
-      reminder.textContent = 'Your progress has not been exported yet. Export it in Settings.';
-      reminder.hidden = false;
-    } else if (Date.now() - last > EXPORT_REMINDER_DAYS * DAY_MS) {
-      const days = Math.floor((Date.now() - last) / DAY_MS);
-      reminder.textContent = `Last export was ${days} days ago. Export again in Settings.`;
-      reminder.hidden = false;
-    } else {
-      reminder.hidden = true;
-    }
+    $('home-settings').classList.toggle('due', !last || Date.now() - last > EXPORT_REMINDER_DAYS * DAY_MS);
   }
 
   // ---- Home, right after a level: the coins counting up, and the banner ----
@@ -176,6 +169,7 @@ export function createScreens(theme) {
 
   function hud(game) {
     // A bonus level (every 10th) shows its own name instead of the tier.
+    $('screen-level').dataset.tier = game.level.tier ? String(game.level.tier) : '';
     $('hud-tier').textContent = game.level.bonus && theme.bonusName ? theme.bonusName : tierName(game.level.tier);
     $('hud-level').textContent = 'Level ' + num(game.level.n);
     $('hud-moves').textContent = String(game.movesLeft);
@@ -258,6 +252,66 @@ export function createScreens(theme) {
     $('settings-msg').textContent = message || '';
   }
 
+  // ---- Before a level: what it asks for, and the boosters to start with ----
+  // extra: what winning it pays on top (a Medium or Hard level), or null.
+  function prelevel(level, save, extra, renderReward) {
+    $('pre-title').textContent = 'Level ' + num(save.level);
+    $('pre-tier').textContent = level && level.bonus && theme.bonusName ? theme.bonusName : tierName(level && level.tier);
+    const box = $('pre-targets');
+    box.textContent = '';
+    for (const t of (level && level.targets) || []) {
+      const chip = document.createElement('div');
+      chip.className = 'target';
+      chip.setAttribute('aria-label', targetName(t));
+      const n = document.createElement('span');
+      n.textContent = num(t.need);
+      chip.append(iconCanvas(44, (ctx) => drawTargetIcon(ctx, t, 44, theme)), n);
+      box.appendChild(chip);
+    }
+    const win = $('pre-win');
+    win.textContent = '';
+    win.hidden = !extra;
+    if (extra) {
+      const label = document.createElement('div');
+      label.className = 'pre-win-label';
+      label.textContent = `Win for ${level.tier + 1}x event points and`;
+      win.append(label, renderReward({ coins: ECONOMY.winCoins[level.tier], ...extra }, 28));
+    }
+    $('prelevel').dataset.tier = level && !level.bonus ? String(level.tier) : '';
+    $('prelevel').hidden = false;
+    $('pre-play').focus({ preventScroll: true });
+  }
+
+  // ---- After a level: stays up until it is closed ----
+  // fill(box) adds what the side games gained.
+  function finish(result, levelN, fill) {
+    return new Promise((done) => {
+      const won = result.status === 'won';
+      const box = $('finish');
+      box.classList.toggle('lost', !won);
+      $('fin-title').textContent = 'Level ' + num(levelN);
+      $('fin-word').textContent = won ? 'Bravo!' : 'Not this time';
+      const art = $('fin-art');
+      art.textContent = '';
+      const name = won ? 'badge-trophy' : 'badge-masks';
+      art.appendChild(iconCanvas(120, (ctx) => drawArt(ctx, name, 60, 60, 120, 120)));
+      coinLines(result, $('fin-lines'));
+      const more = $('fin-events');
+      more.textContent = '';
+      fill(more);
+      more.scrollTop = 0;
+      box.hidden = false;
+      const close = () => {
+        box.hidden = true;
+        $('fin-ok').onclick = null;
+        $('fin-x').onclick = null;
+        done();
+      };
+      $('fin-ok').onclick = close;
+      $('fin-x').onclick = close;
+    });
+  }
+
   // ---- A yes/no question. Gives back true for yes, false for no. ----
   function confirm(text, yesLabel, noLabel) {
     return new Promise((answer) => {
@@ -277,5 +331,5 @@ export function createScreens(theme) {
     });
   }
 
-  return { show, home, hud, results, coinLines, tickCoins, roundBanner, hideRoundBanner, settings, confirm, $ };
+  return { show, home, hud, results, coinLines, tickCoins, roundBanner, hideRoundBanner, settings, confirm, prelevel, finish, $ };
 }

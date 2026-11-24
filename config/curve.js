@@ -15,14 +15,14 @@ export const CURVE = {
   // ---- Which levels are hard -------------------------------------------
   tierPattern: {
     // Looks at the LAST DIGIT of the level number.
-    // 5: 1 means levels 5, 15, 25 ... are tier 1 (hard).
-    // 8: 2 means levels 8, 18, 28 ... are tier 2 (super hard).
+    // Every third level is special: 3 and 6 are Medium (tier 1), 9 is Hard
+    // (tier 2); then 10 is the bonus level, and round again.
     // Levels ending in 0 are reserved for the bonus level (a later phase);
     // for now they are regular levels, so they are not listed here.
-    byLastDigit: { 5: 1, 8: 2 },
-    // Extremely hard levels: one in every `every` levels, at position `at`.
-    // every 30, at 23 gives levels 23, 53, 83 ...
-    tier3: { every: 30, at: 23 },
+    byLastDigit: { 3: 1, 6: 1, 9: 2 },
+    // Tier 3 (not used now): one in every `every` levels, at position `at`.
+    // every 30, at 23 would give levels 23, 53, 83 ... (at: -1 = never)
+    tier3: { every: 30, at: -1 },
   },
 
   // ---- How many piece colors ---------------------------------------------
@@ -684,6 +684,8 @@ export const CURVE = {
   // Moves the player gets, per tier. Deliberately generous for now so every
   // level can be won; phase 2's simulator will replace these.
   baseMoves: [24, 24, 23, 22],
+  // At the very end a level's moves are multiplied by this, per tier.
+  movesFactor: [1, 0.86, 0.68, 0.68],
 
   // ---- Obstacles ---------------------------------------------------------
   // What each obstacle is and how it breaks is in config/obstacles.js.

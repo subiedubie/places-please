@@ -60,7 +60,10 @@ function speedFactor(speed) {
 // before     optional: the board as it was before these events
 // early      optional: a function giving the early move the player has made
 //            while this is playing (or null); it slides while the rest falls
-export async function playEvents(events, drawFrame, theme, speed, before, early) {
+// live       optional, for things that overlap (ui/live.js): step(n) is called
+//            as each step begins, lift(x, y) says how far from its cell a
+//            thing is that is about to fall from there
+export async function playEvents(events, drawFrame, theme, speed, before, early, live) {
   if (!Array.isArray(events)) return;
   const k = speedFactor(speed);
 
@@ -111,9 +114,10 @@ export async function playEvents(events, drawFrame, theme, speed, before, early)
     for (const name of Object.keys(T)) T[name] *= squeeze;
   }
 
-  for (const step of steps) {
+  for (const [n, step] of steps.entries()) {
     try {
-      if (step.falls.length || step.spawns.length || step.slides.length) await playFall(step, drawFrame, T, early, 90 * k);
+      if (live) live.step(n);
+      if (step.falls.length || step.spawns.length || step.slides.length) await playFall(step, drawFrame, T, early, 90 * k, live);
       else await playBurst(step, drawFrame, T);
     } catch {
       // If the fancy version trips on an unexpected shape, fall back to
@@ -151,7 +155,7 @@ function newStep() {
 
 // Cut the engine's event list into steps, one per "frame" event.
 // Event types this file does not know are skipped.
-function splitSteps(events, before) {
+export function splitSteps(events, before) {
   const steps = [];
   const armed = []; // power-ups already cleared that have not gone off yet: { x, y, kind }
   let step = newStep();
@@ -501,7 +505,7 @@ async function playBurst(step, drawFrame, T) {
 // Pieces fall from where they were to where the new picture has them:
 // slowly at first, then faster, with a small squash as they land. New
 // pieces drop in from above the board.
-async function playFall(step, drawFrame, T, early, swapMs) {
+async function playFall(step, drawFrame, T, early, swapMs, live) {
   const { board, falls, spawns } = step;
   const ms = T.fall;
   const { flashes, ghosts } = hitExtras(step.hits, step.prev);
@@ -531,7 +535,8 @@ async function playFall(step, drawFrame, T, early, swapMs) {
   }
   for (const [toKey, from] of origin) {
     const [tx, ty] = toKey.split(',').map(Number);
-    starts.set(toKey, { dx: from.x - tx, dy: from.y - ty });
+    const up = live ? live.lift(from.x, from.y) : null; // still in the air from before
+    starts.set(toKey, { dx: from.x - tx + (up ? up.dx : 0), dy: from.y - ty + (up ? up.dy : 0) });
   }
 
   for (const m of step.slides) starts.set(key(m.to.x, m.to.y), { dx: m.from.x - m.to.x, dy: m.from.y - m.to.y, slide: true });

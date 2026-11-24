@@ -76,7 +76,7 @@ const SHORT_NAMES = {
 };
 
 const BADGE_PX = 60;                 // how wide a badge picture is on Home at most (and how sharply it is drawn)
-const BADGE_MIN_PX = 40;             // the smallest it may shrink to on a short screen
+const BADGE_MIN_PX = 30;             // the smallest it may shrink to on a short screen
 const PILL_PX = 27;                  // the timer pill under a badge, with its small gap (see .ev-b-time)
 const GAP_MIN_PX = 4;                // the least and the most room between two badges in a column
 const GAP_MAX_PX = 28;
@@ -1302,5 +1302,5 @@ export function createEvents(session, onChange) {
     mount.append(seg, h('p', 'note', TEXT.rivalsNote));
   }
 
-  return { home, snapshot, openRound, level, results, settings, openTray, openAlbum, openDetail, closeSheet, renderReward, openSheet, refreshSheet: () => drawSheet(false) };
+  return { home, snapshot, openRound, level, results, resultsInto, settings, openTray, openAlbum, openDetail, closeSheet, renderReward, openSheet, refreshSheet: () => drawSheet(false) };
 }

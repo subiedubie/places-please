@@ -113,7 +113,12 @@ test('treasure is collected when the last confetti over it goes', () => {
 });
 
 test('every twist has its introduction level, and the levels are well formed', () => {
-  for (const [kind, n] of Object.entries(TWISTS.intro)) assert.deepEqual(twistsFor(n, 0), [kind]);
+  for (const [kind, n] of Object.entries(TWISTS.intro)) {
+    assert.deepEqual(twistsFor(n, 0), [kind]);
+    const L = generateLevel(n);
+    const there = kind === 'revolve' ? L.revolves.length : L.targets.some((t) => t.block === ({ doves: 'dove', paint: 'paint_floor' }[kind] || kind));
+    assert.ok(there, `${kind} is on level ${n}`);
+  }
   const seen = {};
   for (let n = 1; n <= 400; n++) {
     const L = generateLevel(n);

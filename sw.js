@@ -4,7 +4,7 @@
 // To publish an update:
 //   1. run `node tools/update-sw-list.js` (rewrites the list below)
 //   2. raise the version number in CACHE (v1 -> v2 -> ...)
-const CACHE = 'places-please-v18';
+const CACHE = 'places-please-v19';
 
 // The list between the two markers is written by tools/update-sw-list.js.
 // Do not edit it by hand.
@@ -32,6 +32,7 @@ const FILES = [
   './engine/boosters.js',
   './engine/drops.js',
   './engine/game.js',
+  './engine/live.js',
   './engine/matches.js',
   './engine/moves.js',
   './engine/powers.js',
@@ -79,6 +80,7 @@ const FILES = [
   './ui/help.css',
   './ui/help.js',
   './ui/input.js',
+  './ui/live.js',
   './ui/main.js',
   './ui/render.js',
   './ui/screens.js',

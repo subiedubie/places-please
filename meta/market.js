@@ -24,6 +24,9 @@ export function createMarket(getSave, rewards, shop = SHOP, drops = DROPS) {
   const api = {
     title: shop.title,
 
+    // What winning a level of this tier pays on top of the usual (or null).
+    tierReward: (tier) => (drops.byTier || [])[tier] || null,
+
     // { coins, shelves: [{ name, items: [{ id, title, price, reward, owned }] }],
     //   gift: { reward, ready }, deal: { id, title, price, was, reward, ready } }
     view(now) {
@@ -77,7 +80,7 @@ export function createMarket(getSave, rewards, shop = SHOP, drops = DROPS) {
       const m = memory();
       m.wins = (m.wins || 0) + 1;
       const extra = (drops.byTier || [])[tier];
-      if (extra) rewards.add(extra, 'Hard level won', drops.title, now);
+      if (extra) rewards.add(extra, tier === 1 ? 'Medium level won' : 'Hard level won', drops.title, now);
       if (bonus && drops.bonusLevel) rewards.add(drops.bonusLevel, 'Benefit Night', drops.title, now);
       if (m.wins % drops.everyWins === 0) {
         const turn = m.wins / drops.everyWins - 1;

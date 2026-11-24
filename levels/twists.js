@@ -55,7 +55,10 @@ export function addTwists(level, cfg = TWISTS) {
     const full = L.targets.length >= 3;
     if (TARGET[kind] && full) {
       // Room for its target: it takes the place of a color target, if any.
-      const i = L.targets.findIndex((t) => t.color !== undefined);
+      // (On the level that introduces it, of any target: the obstacles stay,
+      // they just need not all be cleared.)
+      let i = L.targets.findIndex((t) => t.color !== undefined);
+      if (i < 0 && cfg.intro[kind] === level.n) i = L.targets.length - 1;
       if (i < 0) continue;
       L.targets.splice(i, 1);
     }

@@ -3,8 +3,8 @@
 
 export const ECONOMY = {
   // Coins for winning a level, one value per tier:
-  // [regular, hard, super hard, extremely hard].
-  winCoins: [20, 40, 60, 100],
+  // [normal, medium, hard, (not used)].
+  winCoins: [20, 75, 150, 200],
 
   // Coins for each move the player still had left when the level was won.
   perLeftoverMove: 5,

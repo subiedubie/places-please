@@ -50,19 +50,10 @@
         <div id="home-level" class="big"></div>
       </div>
       <div class="card coins-card"><div><div class="label">Coins</div><div id="home-coins" class="mid"></div></div><button id="home-shop" class="home-shop" type="button">Shop</button></div>
-      <!-- The streak gift: what the next level starts with. Hidden when there is none. -->
-      <div id="home-gift" class="card gift" hidden>
-        <div id="home-gift-label" class="label">Standing Ovation: starts with</div>
-        <div id="home-gift-icons" class="gift-icons"></div>
-        <div id="home-gift-super" class="gift-super" hidden>Super Magic Ball active</div>
-      </div>
-      <!-- Pre-level boosters to switch on for the next level (filled by ui/boosters.js). -->
-      <div id="home-boosters" class="card gift" hidden></div>
       <button id="home-play" class="btn primary tall">Play</button>
       <!-- Timed boosts that are running (filled by ui/events.js). The side-game
            badges themselves are in #home-left and #home-right. -->
       <div id="home-events"></div>
-      <p id="home-reminder" class="note" hidden></p>
     </div>
     <div id="home-right" class="home-side right"></div>
     </div>
@@ -165,6 +156,39 @@
         <button id="oom-buy" class="btn primary tall"></button>
         <button id="oom-quit" class="btn quiet">Give up</button>
       </div>
+    </div>
+  </div>
+
+  <!-- BEFORE A LEVEL: what it asks for, and what to start with. -->
+  <div id="prelevel" class="overlay card-overlay" hidden>
+    <div class="level-card-big" role="dialog" aria-modal="true" aria-labelledby="pre-title">
+      <button id="pre-x" class="card-x" type="button" aria-label="Close">✕</button>
+      <h2 id="pre-title" class="marquee"></h2>
+      <div id="pre-tier" class="card-tier"></div>
+      <div id="pre-targets" class="pre-targets"></div>
+      <div id="pre-win" class="pre-win" hidden></div>
+      <!-- The streak gift: what the next level starts with. Hidden when there is none. -->
+      <div id="home-gift" class="card gift" hidden>
+        <div id="home-gift-label" class="label">Standing Ovation: starts with</div>
+        <div id="home-gift-icons" class="gift-icons"></div>
+        <div id="home-gift-super" class="gift-super" hidden>Super Magic Ball active</div>
+      </div>
+      <!-- Pre-level boosters to switch on for the next level (filled by ui/boosters.js). -->
+      <div id="home-boosters" class="card gift" hidden></div>
+      <button id="pre-play" class="go-btn" type="button">Play</button>
+    </div>
+  </div>
+
+  <!-- AFTER A LEVEL: closed with Finish or the X (ui/screens.js). -->
+  <div id="finish" class="overlay card-overlay" hidden>
+    <div class="level-card-big" role="dialog" aria-modal="true" aria-labelledby="fin-title">
+      <button id="fin-x" class="card-x" type="button" aria-label="Close">✕</button>
+      <h2 id="fin-title" class="marquee"></h2>
+      <div id="fin-art" class="fin-art"></div>
+      <div id="fin-word" class="fin-word"></div>
+      <div id="fin-lines" class="lines"></div>
+      <div id="fin-events" class="fin-events"></div>
+      <button id="fin-ok" class="go-btn" type="button">Finish</button>
     </div>
   </div>
 
