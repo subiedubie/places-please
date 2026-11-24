@@ -21,6 +21,7 @@ import {
   get, set, cloneBoard, EMPTY, isPiece, isPower, isBlock, hitBlock,
 } from './board.js';
 import { fire } from './powers.js';
+import { stillNeeded } from './game.js'; // what a Ninja Star set off by a booster aims at
 import { settle } from './resolve.js';
 import { uncover } from './twists.js';
 import { hasLegalMove, reshuffle } from './moves.js';
@@ -88,21 +89,6 @@ function dropContext(game) {
     movesLeft: game.movesLeft,
     history: game.history,
   };
-}
-
-// Which cells the level still needs (a Ninja Star set off by a booster uses
-// this to choose where to fly). Same idea as stillNeeded in engine/game.js.
-function stillNeeded(game) {
-  const open = (t) => t.have < t.need;
-  const needs = (cell) => {
-    if (isPiece(cell)) return game.targets.some((t) => t.color === cell.color && open(t));
-    if (isBlock(cell)) {
-      if (game.targets.some((t) => t.block === cell.kind && open(t))) return true;
-      return cell.kind === 'padlock' && isBlock(cell.inside) && needs(cell.inside);
-    }
-    return false;
-  };
-  return (cell) => needs(cell);
 }
 
 // ---- The blast --------------------------------------------------------------

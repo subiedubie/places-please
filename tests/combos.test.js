@@ -265,3 +265,12 @@ test('a tapped Magic Ball clears the needed color, not just the most common one'
   const colors = new Set(events.filter((e) => e.type === 'clear').flatMap((e) => e.cells).filter((c) => _isPiece(c.was)).map((c) => c.was.color));
   assert.deepEqual([...colors], [4]);
 });
+
+test('a Magic Ball swapped with a Grenade picks the color whose blasts reach what is needed', () => {
+  // Color 0 is the most common, all on the left; the needed cells are on the far right, near color 4.
+  const b = boardFrom(['PS0011223', '001112233', '002233114', '011223312', '003112233']);
+  const t = combine(b, { x: 0, y: 0 }, { x: 1, y: 0 }, { rng: makeRng(1), needs: (c, x, y) => x >= 7 && y <= 1 && !isPower(c) }).find((e) => e.type === 'transform');
+  assert.notEqual(t.cells[0].was.color, 0);
+  const reach = t.cells.some((c) => c.x >= 6 && c.y <= 3);
+  assert.ok(reach);
+});

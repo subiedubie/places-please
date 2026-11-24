@@ -1,7 +1,7 @@
 // The twists: ivy, mice, prop bombs, chameleons, revolving stages, treasure.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, act, serialize, deserialize } from '../engine/game.js';
+import { newGame, act, serialize, deserialize, stillNeeded } from '../engine/game.js';
 import { ringOf, countKind } from '../engine/twists.js';
 import { generateLevel } from '../levels/generate.js';
 import { twistsFor } from '../levels/twists.js';
@@ -152,4 +152,15 @@ test('400 random games on twist levels never break', () => {
     if (g.status === 'won') won++;
   }
   console.log(`twists: ${won} of 400 won with random play`);
+});
+
+test('aiming: below a wanted sandbag, under a wanted curtain color, and mice', () => {
+  const g = newGame({ ...LEVEL, drops: [{ x: 2, y: 3 }], blocks: [{ x: 6, y: 6, kind: 'mouse' }], targets: [{ block: 'sandbag', need: 1 }, { block: 'mouse', need: 1 }] }, 2);
+  const need = stillNeeded(g);
+  const at = (x, y) => need(get(g.board, x, y), x, y);
+  const col = [...Array(8).keys()].flatMap((x) => [...Array(8).keys()].filter((y) => g.board.cells[y * 8 + x]?.t === 'drop').map((y) => ({ x, y })));
+  assert.ok(col.length >= 1);
+  assert.equal(at(col[0].x, col[0].y + 1), true);
+  assert.equal(at((col[0].x + 1) % 8 === 6 ? 0 : (col[0].x + 1) % 8, 7), false);
+  assert.equal(at(6, 6), true);
 });

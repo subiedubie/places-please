@@ -262,6 +262,41 @@ function helpfulColor(run) {
   return mostCommonColor(board);
 }
 
+// The MOST HELPFUL color for a Magic Ball swapped with another power-up: every
+// piece of that color becomes the power-up, so each color is scored by what
+// those power-ups would hit, 1000 points for each cell the level still needs
+// (plus 1000 for each Ninja Star, which flies to one more) and 1 point for each
+// other piece. A tie goes to the color with the most pieces, then the lowest.
+function comboColor(run, other, skip) {
+  const { board, opts } = run;
+  let best, bestScore = -1, bestCount = 0;
+  const colors = [...new Set(board.cells.filter(isPiece).map((c) => c.color))].sort((a, b) => a - b);
+  for (const color of colors) {
+    if (color === skip) continue;
+    const from = colorCells(board, color);
+    const seen = new Set();
+    let score = opts.needs && other === 'under' ? from.length * 1000 : 0;
+    from.forEach((p, i) => {
+      const area = isSpot(other) ? (i % 2 === 0 ? rowCells(board, p.y) : colCells(board, p.x))
+        : other === 'under' ? plusCells(p.x, p.y) : squareCells(p.x, p.y, 2);
+      for (const { x, y } of area) {
+        if (!inBounds(board, x, y) || seen.has(keyOf(x, y))) continue;
+        seen.add(keyOf(x, y));
+        let cell = get(board, x, y);
+        if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
+        if (cell === null || cell.t === 'empty' || isDrop(cell)) continue;
+        if (isBlock(cell) && !takesHit(cell, 'power')) continue;
+        if (opts.needs && opts.needs(cell, x, y)) score += 1000;
+        else if (opts.needs && isPiece(cell)) score += 1;
+      }
+    });
+    if (score > bestScore || (score === bestScore && from.length > bestCount)) {
+      best = color; bestScore = score; bestCount = from.length;
+    }
+  }
+  return best;
+}
+
 // ---- One power-up going off ------------------------------------------------
 
 // Carry out the effect of one queued power-up, then add a snapshot.
@@ -375,20 +410,15 @@ export function combine(board, a, b, opts = {}) {
       clearArea(run, again, 'combo', false);
     }
   } else if (kinds.includes('prism')) {
-    // Prism + another power-up: every piece of the most common color turns
+    // Prism + another power-up: every piece of the most helpful color turns
     // into that power-up, then they all go off.
     const other = ka === 'prism' ? kb : ka;
     clearArea(run, both, 'combo');
-    const color = mostCommonColor(board);
+    const color = comboColor(run, other);
     let cells = color === undefined ? [] : colorCells(board, color);
-    // SUPER Magic Ball: the most common AND the second most common colors.
+    // SUPER Magic Ball: the second most helpful color too.
     if (opts.superPrism && color !== undefined) {
-      const counts = [];
-      for (const c of board.cells) if (isPiece(c) && c.color !== color) counts[c.color] = (counts[c.color] ?? 0) + 1;
-      let second;
-      for (let k = 0; k < counts.length; k++) {
-        if (counts[k] && (second === undefined || counts[k] > counts[second])) second = k;
-      }
+      const second = comboColor(run, other, color);
       if (second !== undefined) cells = cells.concat(colorCells(board, second));
     }
     const changed = [];

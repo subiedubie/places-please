@@ -6,7 +6,7 @@
 
 import {
   createBoard, get, set, piece, cloneBoard, adjacent,
-  isPiece, isPower, isBlock, isPart, EMPTY, POWER_KINDS, block, drop,
+  isPiece, isPower, isBlock, isDrop, isPart, EMPTY, POWER_KINDS, block, drop,
   placeBlock, setFloor, floorAt, liftFloor, obstacleDef, anchorOf,
 } from './board.js';
 import { OBSTACLES2 } from '../config/obstacles.js';
@@ -168,11 +168,14 @@ function dropContext(game) {
 //     its block), or a padlock that is holding such a block;
 //   - any cell whose floor (confetti, petals) the level still needs;
 //   - a candy jar when the level still needs candy;
+//   - a piece or obstacle in the column below a sandbag the level still needs
+//     (clearing it lets the sandbag fall);
+//   - a piece of a color that opens a curtain the level still needs;
 //   - a piece right next to a generator (top hat, popcorn cart) whose product
 //     the level still needs. The generator itself is never aimed at: a power
 //     hit does nothing to it.
 // The (x, y) of the cell is optional; without it only the cell itself is judged.
-function stillNeeded(game) {
+export function stillNeeded(game) {
   const open = (id) => game.targets.some((t) => t.block === id && t.have < t.need);
   const blockNeeded = (cell) => {
     if (open(cell.kind)) return true;
@@ -187,8 +190,12 @@ function stillNeeded(game) {
       const floor = floorAt(board, x, y);
       if (floor !== null && (open(floor) || open('treasure'))) return true;
     }
+    if (placed && open('sandbag')) {
+      for (let up = y - 1; up >= 0; up--) if (isDrop(get(board, x, up))) return true;
+    }
     if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
     if (isPiece(cell)) {
+      if (open('curtain') && board.cells.some((c) => isBlock(c) && c.kind === 'curtain' && c.color === cell.color)) return true;
       if (game.targets.some((t) => t.color === cell.color && t.have < t.need)) return true;
       if (cell.fuse !== undefined && open('propbomb')) return true;
       if (cell.mimic && open('chameleon')) return true;
