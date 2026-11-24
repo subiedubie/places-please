@@ -1407,10 +1407,10 @@ function blockArt(ctx, cell, hp, w, h, size, theme, plain) {
   const name = names.find(hasArt);
   if (!name || !drawArt(ctx, name, 0, 0, w * size, h * size)) return false;
   const gem = (c, x, y, s) => drawPiece(ctx, c, x * size, y * size, s * size, theme);
-  if (colored && color >= 0) gem(color, 0, kind === 'paint' ? 0.08 : 0, 0.46);
+  if (colored && color >= 0) gem(color, 0, 0, kind === 'paint' ? 0.38 : 0.5);
   const colors = Array.isArray(cell.colors) ? cell.colors : plain ? [0, 1, 2, 3] : [];
-  if (kind === 'footlights') colors.slice(0, 4).forEach((c, i) => gem(c, (i % 2) - 0.5, (i >> 1) - 0.5, 0.56));
-  if (kind === 'fireworks') colors.slice(0, 3).forEach((c, i) => gem(c, (i - 1) * 0.6, 0, 0.5));
+  if (kind === 'footlights') colors.slice(0, 4).forEach((c, i) => gem(c, (i % 2) - 0.5, (i >> 1) - 0.5, 0.52));
+  if (kind === 'fireworks') colors.slice(0, 3).forEach((c, i) => gem(c, (i - 1) * 0.6, 0, 0.44));
   return true;
 }
 

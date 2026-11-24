@@ -9,6 +9,7 @@
 
 import { cellAt } from './input.js';
 import { drawPowerIcon } from './render.js';
+import { drawArt } from './art.js';
 import { priceOf, countOf, canAfford, extraMovesCount, IN_LEVEL_BOOSTERS, PRE_LEVEL_BOOSTERS, PRE_BOOSTER_POWER } from '../meta/shop.js';
 
 const $ = (id) => document.getElementById(id);
@@ -22,6 +23,7 @@ const num = (n) => Number(n || 0).toLocaleString('en-US');
 //         ('spot' | 'show' | 'prism' draw the power-up the booster gives)
 // Colors come from theme.boosterColors (config/theme.js).
 export function drawBoosterIcon(ctx, kind, size, theme) {
+  if (drawArt(ctx, kind, size / 2, size / 2, size, size)) return; // the rendered picture, if there is one
   const col = (theme && theme.boosterColors) || {};
   const steel = col.steel || '#6f7a8c';
   const red = col.handle || '#c62f2f';
