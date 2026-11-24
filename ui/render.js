@@ -1541,7 +1541,23 @@ function drawDrop(ctx, cx, cy, size, theme) {
 // centered at (cx, cy).
 function drawContent(ctx, cell, cx, cy, size, theme) {
   if (!cell) return;
-  if (cell.t === 'piece') drawPiece(ctx, cell.color, cx, cy, size, theme);
+  if (cell.t === 'piece') {
+    const special = cell.fuse !== undefined || cell.mimic;
+    drawPiece(ctx, cell.color, cx, cy, special ? size * 0.88 : size, theme);
+    if (cell.mimic && !drawArt(ctx, 'mimic', cx, cy, size, size)) {
+      ctx.strokeStyle = '#ff5bd0'; ctx.lineWidth = size * 0.08; ctx.beginPath(); ctx.arc(cx, cy, size * 0.44, 0, TAU); ctx.stroke();
+    }
+    if (cell.fuse !== undefined) {
+      const bx = cx + size * 0.25;
+      const by = cy + size * 0.25;
+      if (!drawArt(ctx, 'fuse', cx, cy, size, size)) { ctx.fillStyle = '#1b2030'; dot(ctx, bx, by, size * 0.22); }
+      ctx.fillStyle = cell.fuse <= 2 ? '#ff5a4d' : '#ffffff';
+      ctx.font = `800 ${Math.round(size * 0.3)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(cell.fuse), bx, by + size * 0.01);
+    }
+  }
   else if (cell.t === 'power') drawPower(ctx, cell.kind, cx, cy, size, theme);
   else if (cell.t === 'block') drawBlock(ctx, cell, cx, cy, size, theme, false);
   else if (cell.t === 'drop') drawDrop(ctx, cx, cy, size, theme);
@@ -1567,6 +1583,10 @@ export function drawTargetIcon(ctx, target, size, theme) {
     const kind = target.block;
     const oc = theme.obstacleColors || {};
     if (kind === DROPPER.id) drawDrop(ctx, mid, mid, size, theme);
+    else if (['propbomb', 'chameleon', 'treasure', 'revolve'].includes(kind)) {
+      // Twists that are not obstacles.
+      drawArt(ctx, kind === 'revolve' ? 'turntable2' : kind, mid, mid, size, size);
+    }
     else if (kind === 'confetti' || kind === 'petals') {
       // A floor target: one cell with that floor on it, and a dark line
       // round it so the small picture has a clear edge.
@@ -1650,6 +1670,15 @@ export function drawTray(ctx, board, layout, theme, shade) {
         cell - gap * 2, cell - gap * 2, cell * 0.14);
       ctx.fill();
     }
+  }
+
+  // Revolving stages, and treasure lying under the confetti.
+  for (const r of board.revolves || []) {
+    const w = r.size * cell;
+    drawArt(ctx, 'turntable' + r.size, originX + r.x * cell + w / 2, originY + r.y * cell + w / 2, w, w);
+  }
+  for (const t of board.hidden || []) {
+    if (!t.found) drawArt(ctx, 'treasure', originX + (t.x + t.w / 2) * cell, originY + (t.y + t.h / 2) * cell, t.w * cell, t.h * cell);
   }
 
   // The floor layer (confetti, petals), on top of the lighter squares and

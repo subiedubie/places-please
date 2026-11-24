@@ -297,7 +297,7 @@ function rememberTargets() {
 fx.collect = (x, y, cell) => {
   if (!onLevel || !layout) return;
   const i = shownTargets.findIndex((t) => t.have < t.need
-    && (cell.t === 'piece' ? t.color === cell.color : t.block === cell.kind));
+    && (cell.t === 'piece' ? t.color === cell.color || (cell.fuse !== undefined && t.block === 'propbomb') || (cell.mimic && t.block === 'chameleon') : t.block === cell.kind));
   const chip = i >= 0 ? $('hud-targets').children[i] : null;
   if (!chip) return;
   const r = canvas.getBoundingClientRect();

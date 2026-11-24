@@ -58,6 +58,7 @@ export function kindsOnLevel(level) {
   for (const b of level.blocks || []) addBlock(set, b);
   if ((level.drops || []).length > 0) addKind(set, DROPPER_ID);
   for (const f of level.floor || []) addKind(set, f && f.kind);
+  if ((level.revolves || []).length > 0) addKind(set, 'revolve');
   for (const t of level.targets || []) if (t && typeof t.block === 'string') addKind(set, t.block);
   return inOrder(set);
 }
@@ -71,6 +72,7 @@ export function kindsOnBoard(game) {
     if (cell && (cell.t === 'block' || cell.t === 'drop')) addBlock(set, cell);
   }
   for (const f of board.floor || []) addKind(set, f);
+  if ((board.revolves || []).length > 0) addKind(set, 'revolve');
   for (const t of game.targets || []) if (t && typeof t.block === 'string') addKind(set, t.block);
   return inOrder(set);
 }
@@ -83,7 +85,7 @@ function kindsInGame() {
   return ALL_KINDS.filter((kind) => {
     if (!ready) return true;
     const isBatch2 = Object.hasOwn(OBSTACLES2, kind) || Object.hasOwn(FLOORS, kind);
-    if (isBatch2) return ready.has(kind);
+    if (isBatch2) return ready.has(kind) || Boolean(OBSTACLES2[kind] && OBSTACLES2[kind].twist);
     // A Dove is in the game only when the Top Hat is, and so on.
     const maker = Object.keys(PRODUCT_OF).find((k) => PRODUCT_OF[k] === kind);
     return maker ? ready.has(maker) : true;

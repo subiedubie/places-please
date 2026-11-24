@@ -22,6 +22,7 @@ import {
 } from './board.js';
 import { fire } from './powers.js';
 import { settle } from './resolve.js';
+import { uncover } from './twists.js';
 import { hasLegalMove, reshuffle } from './moves.js';
 
 // The four in-level boosters, in the order the booster bar shows them.
@@ -55,6 +56,8 @@ function recordEvents(game, events) {
           tally.cleared[c.was.color] = (tally.cleared[c.was.color] || 0) + 1;
           const t = game.targets.find((t) => t.color === c.was.color);
           if (t) t.have = Math.min(t.need, t.have + 1);
+          if (c.was.fuse !== undefined) countBlock(game, 'propbomb');
+          if (c.was.mimic) countBlock(game, 'chameleon');
         }
       }
     } else if (e.type === 'block') {
@@ -205,6 +208,7 @@ export function useBooster(game, kind, at) {
 
   // Let pieces fall, refill, and clear any matches that form, until still.
   events.push(...settle(board, dropContext(game), []));
+  events.push(...uncover(board));
   recordEvents(game, events);
 
   // Never leave the player stuck.

@@ -22,7 +22,7 @@ const PROP_COLORS = {
   crate: 0xc98b4a, hatbox: 0xe85a9b, trunk: 0x8a5530, dryice: 0x6fd6ff, cashbox: 0x7c9cc4,
   flat: 0xc9bfae, strongbox: 0x55606f, costume: 0x1fb5a8, padlock: 0xe0a100, planter: 0x4caf50,
   bouquet: 0xff7aa8, candyjar: 0xff5a6e, dovecote: 0xd94b3d, footlights: 0x44506b,
-  fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5,
+  fireworks: 0xd6283c, truss: 0xaab4c4, ticketbooth: 0xd6283c, makeupcase: 0xe04fb5, ivy: 0x3fae49, mouse: 0xa9a9b8,
 };
 
 export async function createStage(canvas, theme) {
@@ -202,7 +202,8 @@ export async function createStage(canvas, theme) {
   function paintTray() {
     const k = [layout.cell, layout.originX, layout.originY, layout.canvasW, layout.canvasH, dpr].join()
       + '|' + board.cols + '|' + board.cells.map((c) => (c === null ? '#' : '.')).join('')
-      + '|' + (board.floor || []).map((f) => (f ? f[0] : '-')).join('');
+      + '|' + (board.floor || []).map((f) => (f ? f[0] : '-')).join('')
+      + '|' + JSON.stringify([board.revolves, board.hidden]);
     if (k === trayKey) return;
     trayKey = k;
     for (const [sprite, shade] of [[tray, false], [dim, true]]) {

@@ -24,6 +24,13 @@ const DROPPER = OB.DROPPER || { id: 'sandbag', name: 'Sandbag' };
 // The word on the left is the id the game uses; do not change it.
 // Change only the sentence on the right.
 export const RULES = {
+  // Twists (config/twists.js)
+  ivy: 'Make a match next to Creeping Ivy to cut it. It grows after every move unless you cut some, so clear it all.',
+  mouse: 'The Stage Mouse hops after every move. Make a match next to it, or blast it, to catch it.',
+  propbomb: 'Match a Prop Bomb before its number runs out and it explodes for you. Too late, and it leaves a Crate and turns up somewhere else.',
+  chameleon: 'A Chameleon changes color after every move. Match it while it is the color you need.',
+  treasure: 'Clear all the confetti over a Hidden Treasure to collect it.',
+  revolve: 'The Revolving Stage turns one step after every move. Plan for where the gems will be.',
   // Batch 1 obstacles
   crate:     'Make a match next to a Crate to break it.',
   hatbox:    'Make 2 matches next to a Hatbox to break it.',
@@ -66,6 +73,7 @@ export const RULES = {
 // Names for the collectibles (the obstacles get their names from
 // config/obstacles.js).
 export const COLLECTIBLE_NAMES = {
+  propbomb: 'Prop Bomb', chameleon: 'Chameleon', treasure: 'Hidden Treasure', revolve: 'Revolving Stage',
   dove: 'Dove',
   popcorn: 'Popcorn',
   candy: 'Candy',

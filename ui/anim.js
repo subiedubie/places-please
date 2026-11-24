@@ -113,7 +113,7 @@ export async function playEvents(events, drawFrame, theme, speed, before, early)
 
   for (const step of steps) {
     try {
-      if (step.falls.length || step.spawns.length) await playFall(step, drawFrame, T, early, 90 * k);
+      if (step.falls.length || step.spawns.length || step.slides.length) await playFall(step, drawFrame, T, early, 90 * k);
       else await playBurst(step, drawFrame, T);
     } catch {
       // If the fancy version trips on an unexpected shape, fall back to
@@ -140,6 +140,7 @@ function newStep() {
     effects: [],     // streaks, rings and beams to draw (see drawFx in render.js)
     falls: [],
     spawns: [],
+    slides: [],      // things changing places (a mouse, a revolving stage)
     swapped: false,  // two pieces changed places (already shown sliding)
     hits: [],        // obstacles hit, floor swept, things collected
     flies: [],       // Ninja Star flights: { from, to }
@@ -168,7 +169,8 @@ function splitSteps(events, before) {
       }
     } else if (ev.type === 'fall' && Array.isArray(ev.falls)) step.falls.push(...ev.falls);
     else if (ev.type === 'refill' && Array.isArray(ev.spawns)) step.spawns.push(...ev.spawns);
-    else if ((ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor') && isPos(ev)) step.hits.push(ev);
+    else if (ev.type === 'slide' && Array.isArray(ev.moves)) step.slides.push(...ev.moves);
+    else if ((ev.type === 'grow' || ev.type === 'block' || ev.type === 'collect' || ev.type === 'floor') && isPos(ev)) step.hits.push(ev);
     else if (ev.type === 'fly' && isPos(ev.from) && isPos(ev.to)) step.flies.push(ev);
     else if (ev.type === 'transform' && Array.isArray(ev.cells)) {
       for (const c of ev.cells) {
@@ -264,7 +266,7 @@ function flipPlan(n, T) {
 
 // How long one step takes to play (used to keep a whole move within budget).
 function stepCost(step, T) {
-  if (step.falls.length || step.spawns.length) return T.fall;
+  if (step.falls.length || step.spawns.length || step.slides.length) return T.fall;
   let ms = 0;
   if (step.flies.length) ms += T.fly;
   if (step.effects.length) ms += T.fx;
@@ -293,6 +295,8 @@ function hitExtras(hits, before) {
       // A dove, popcorn or candy given out by a generator (or any collect
       // kind added later): the generator stays, so just flash its cell.
       flashes.push({ x: h.x, y: h.y, alpha: 1 });
+      emit('spark', h.x, h.y);
+      emit('collect', h.x, h.y, { t: 'block', kind: h.kind });
       continue;
     }
     if (h.type === 'collect') {
@@ -523,6 +527,8 @@ async function playFall(step, drawFrame, T, early, swapMs) {
     starts.set(toKey, { dx: from.x - tx, dy: from.y - ty });
   }
 
+  for (const m of step.slides) starts.set(key(m.to.x, m.to.y), { dx: m.from.x - m.to.x, dy: m.from.y - m.to.y, slide: true });
+
   if (starts.size === 0 && ghosts.length === 0 && flashes.length === 0) {
     drawFrame(board);
     return pause(ms);
@@ -534,6 +540,7 @@ async function playFall(step, drawFrame, T, early, swapMs) {
   const far = Math.max(1, ...[...starts.values()].map((s) => Math.hypot(s.dx, s.dy)));
   for (const [k, s] of starts) {
     const [x, y] = k.split(',').map(Number);
+    if (s.slide) { s.delay = 0; s.drop = 0.8; continue; }
     s.delay = 0.16 * (1 - y / Math.max(1, board.rows - 1)) + 0.05 * (((x * 7) % 5) / 5);
     s.drop = 0.3 + 0.2 * Math.sqrt(Math.hypot(s.dx, s.dy) / far);
   }
@@ -562,6 +569,7 @@ async function playFall(step, drawFrame, T, early, swapMs) {
       const left = 1 - f * f; // starts slow, ends fast, like falling
       let sx = 1;
       let sy = 1;
+      if (s.slide) { const e = 1 - f * f * (3 - 2 * f); offsets.set(k, { dx: s.dx * e, dy: s.dy * e, sx: 1, sy: 1 }); continue; }
       if (f < 1) { sx = 1 - 0.07 * f; sy = 1 + 0.1 * f; } // stretched by its speed
       else {
         const u = clamp01((t - s.delay - s.drop) / Math.max(0.05, 1 - s.delay - s.drop));

@@ -129,6 +129,8 @@ export function set(b, x, y, cell) {
 export function cloneBoard(b) {
   const copy = { cols: b.cols, rows: b.rows, cells: b.cells.slice() };
   if (b.floor) copy.floor = b.floor.slice(); // old boards may have no floor
+  if (b.revolves) copy.revolves = b.revolves; // (these two are never changed in place)
+  if (b.hidden) copy.hidden = b.hidden;
   return copy;
 }
 

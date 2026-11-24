@@ -64,6 +64,9 @@ export const OBSTACLES2 = {
   truss:       { name: 'Lighting Truss', size: [3, 1], hits: ['power', 'power'] },                // like the Metal Tube
   ticketbooth: { name: 'Ticket Booth',   size: [3, 1], hits: ['power', 'match', 'match', 'match'], leaves: 'power' }, // like the Slot Machine
   makeupcase:  { name: 'Makeup Case',    size: [1, 1], hits: ['match'], toggles: true },          // like the Bow Tie box
+  // Twists (config/twists.js): they act by themselves; see engine/twists.js.
+  ivy:         { name: 'Creeping Ivy',   size: [1, 1], hits: ['any'], twist: true },
+  mouse:       { name: 'Stage Mouse',    size: [1, 1], hits: ['any'], twist: true },
   curtain:     { name: 'Curtain',        size: [1, 1], hits: [], curtain: true },                 // like the Curtain
 };
 

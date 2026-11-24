@@ -4,6 +4,7 @@
 // What happens when a button is pressed is decided in ui/main.js.
 
 import { drawTargetIcon, drawPowerIcon } from './render.js';
+import { nameFor } from '../config/help.js';
 import { OBSTACLES, DROPPER } from '../config/obstacles.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -47,7 +48,7 @@ export function createScreens(theme) {
   function targetName(t) {
     if (typeof t.block === 'string') {
       if (t.block === DROPPER.id) return DROPPER.name;
-      return OBSTACLES[t.block] ? OBSTACLES[t.block].name : 'Obstacle';
+      return nameFor(t.block);
     }
     return theme.pieces[t.color] ? theme.pieces[t.color].name : 'Piece';
   }

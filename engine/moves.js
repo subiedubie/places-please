@@ -115,7 +115,7 @@ export function reshuffle(board, rng) {
   if (spots.length === 0) return board; // nothing to rearrange
 
   const colorOf = (p) => get(board, p.x, p.y).color;
-  const setColor = (p, color) => set(board, p.x, p.y, piece(color));
+  const setColor = (p, color) => set(board, p.x, p.y, { ...get(board, p.x, p.y), color }); // (a bomb or chameleon stays one)
 
   // --- Path 1: same pieces, new places ---
   for (let attempt = 0; attempt < SHUFFLE_TRIES; attempt++) {

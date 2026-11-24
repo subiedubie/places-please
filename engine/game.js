@@ -14,6 +14,7 @@ import { makeRng } from './rng.js';
 import { findGroups } from './matches.js';
 import { DROP_RULES } from './drops.js';
 import { settleSteps } from './resolve.js';
+import { placeTwists, takeTurn, uncover, syncTargets } from './twists.js';
 import { fire, combine } from './powers.js';
 import { hasLegalMove, reshuffle } from './moves.js';
 
@@ -101,13 +102,18 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
   // Safety net: the fill above avoids matches, but make sure a move exists.
   if (findGroups(board).length > 0 || !hasLegalMove(board)) reshuffle(board, setupRng);
 
+  placeTwists(board, level);
+
   // Each gift replaces one ordinary piece, chosen at random. Replacing a piece
   // with a power-up cannot create a match, so the board stays clean.
   const giftRng = base.fork('gifts');
   for (const kind of options.startPowers || []) {
     const spots = [];
     for (let y = 0; y < board.rows; y++) {
-      for (let x = 0; x < board.cols; x++) if (isPiece(get(board, x, y))) spots.push({ x, y });
+      for (let x = 0; x < board.cols; x++) {
+        const c = get(board, x, y);
+        if (isPiece(c) && c.fuse === undefined && !c.mimic) spots.push({ x, y });
+      }
     }
     if (spots.length === 0) break;
     const at = giftRng.pick(spots);
@@ -138,6 +144,7 @@ export function newGame(level, attemptSeed, dropRule = DROP_RULES.D1, options = 
     superPrism: !!options.superPrism, // Magic Balls have double effect this level
   };
   // Not saved as-is (functions and generator state); see serialize().
+  syncTargets(game);
   Object.defineProperty(game, '_rng', { value: base.fork('drops'), writable: true, enumerable: false });
   Object.defineProperty(game, '_dropRule', { value: dropRule, writable: true, enumerable: false });
   return game;
@@ -178,11 +185,13 @@ function stillNeeded(game) {
     const placed = x !== undefined && y !== undefined;
     if (placed) {
       const floor = floorAt(board, x, y);
-      if (floor !== null && open(floor)) return true;
+      if (floor !== null && (open(floor) || open('treasure'))) return true;
     }
     if (isPart(cell)) cell = get(board, cell.ax, cell.ay);
     if (isPiece(cell)) {
       if (game.targets.some((t) => t.color === cell.color && t.have < t.need)) return true;
+      if (cell.fuse !== undefined && open('propbomb')) return true;
+      if (cell.mimic && open('chameleon')) return true;
       if (!placed) return false;
       // Next to a generator whose product is needed?
       return [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => {
@@ -218,11 +227,14 @@ function recordEvents(game, events) {
           game.tally.cleared[c.was.color]++;
           const t = game.targets.find((t) => t.color === c.was.color);
           if (t) t.have = Math.min(t.need, t.have + 1);
+          if (c.was.fuse !== undefined) countBlock(game, 'propbomb');
+          if (c.was.mimic) countBlock(game, 'chameleon');
         }
       }
     } else if (e.type === 'block') {
       // An obstacle took a hit; it only counts once it is destroyed.
       if (e.destroyed) countBlock(game, e.kind);
+      if (e.destroyed && e.kind === 'ivy') game.history.ivyCut = true; // it does not grow this move
     } else if (e.type === 'collect') {
       // A dropper reached the bottom ('sandbag'), or a generator or candy jar
       // handed something out ('dove', 'popcorn', 'candy').
@@ -373,10 +385,14 @@ export function* actSteps(game, action) {
 // Let the board come to rest (clear, fall, refill, repeat), then end the move.
 export function* finishSteps(game, origins = []) {
   const board = game.board;
+  let turned = false; // the twists (engine/twists.js) take their turn once, when the board is still
   for (;;) {
     const ctx = { ...dropContext(game), needs: stillNeeded(game) };
     let again = false;
     for (const step of settleSteps(board, ctx, origins)) {
+      // Treasure uncovered in this step (told just before its last picture).
+      const found = uncover(board);
+      if (found.length > 0) step.events.splice(Math.max(0, step.events.length - 1), 0, ...found);
       recordEvents(game, step.events);
       const early = yield step;
       if (!early || !step.landed || game.movesLeft <= 0 || targetsMet(game)) continue;
@@ -396,7 +412,14 @@ export function* finishSteps(game, origins = []) {
     // Curtains open once enough of their color has been cleared this level.
     // What was behind them may fall or match, so the board settles again.
     const opened = openCurtains(game);
-    if (opened.length === 0) break;
+    if (opened.length === 0) {
+      if (turned || targetsMet(game)) break;
+      turned = true;
+      const acted = takeTurn(game);
+      if (acted.length === 0) break;
+      yield { events: acted, landed: false };
+      continue; // what moved may now match
+    }
     const events = [...opened, { type: 'frame', board: cloneBoard(board) }];
     recordEvents(game, events);
     yield { events, landed: false };
@@ -431,6 +454,8 @@ export function serialize(game) {
       cells: game.board.cells,
       // The floor layer (an old game without one saves as all null).
       floor: game.board.floor || new Array(game.board.cells.length).fill(null),
+      ...(game.board.revolves ? { revolves: game.board.revolves } : {}),
+      ...(game.board.hidden ? { hidden: game.board.hidden } : {}),
     },
     movesLeft: game.movesLeft,
     targets: game.targets,
@@ -450,7 +475,7 @@ export function deserialize(data, dropRule = DROP_RULES.D1) {
   const game = {
     level: d.level,
     // An old save has no floor layer: that reads as no floor anywhere.
-    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null) },
+    board: { cols: d.board.cols, rows: d.board.rows, cells, floor: d.board.floor || new Array(cells.length).fill(null), ...(d.board.revolves ? { revolves: d.board.revolves } : {}), ...(d.board.hidden ? { hidden: d.board.hidden } : {}) },
     movesLeft: d.movesLeft,
     targets: d.targets,
     status: d.status,

@@ -1,5 +1,6 @@
 // Builds level number n. The result depends only on n and config/curve.js,
 // so level 37 is the same level every time, on every device.
+import { addTwists } from './twists.js';
 import { makeRng } from '../engine/rng.js';
 import { CURVE } from '../config/curve.js';
 import * as OB from '../config/obstacles.js';
@@ -538,7 +539,14 @@ function movesFor(tier, blocks, drops, floor, targets, curve) {
 
 // `options.ready`: the batch-2 kinds that may be used (default: the list the
 // engine exports as BATCH2_READY). Tests pass their own list.
+// options.ready: the batch-2 kinds to use (for tests; a level made that way has
+// no twists unless options.twists is true).
 export function generateLevel(n, curve = CURVE, options = {}) {
+  const level = plainLevel(n, curve, options);
+  return options.twists ?? !options.ready ? addTwists(level) : level;
+}
+
+function plainLevel(n, curve, options) {
   const ready = options.ready || READY;
   const tier = tierFor(n, curve);
   // One random stream per decision, each fixed by the level number, so

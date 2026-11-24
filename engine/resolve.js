@@ -309,6 +309,10 @@ export function* settleSteps(board, ctx, origins = []) {
         const lifted = liftFloor(board, c.x, c.y);
         if (lifted) events.push(lifted);
       }
+      // A prop bomb matched in time goes off like a Grenade, for the player.
+      for (const c of cells) {
+        if (c.was.fuse !== undefined) events.push(...blast(board, { x: c.x, y: c.y }, { rng: ctx.rng, needs: ctx.needs }));
+      }
       // Blocks next to the group take a match hit:
       //   { type: 'block', x, y, kind, hpLeft, destroyed, by: 'match' }
       events.push(...hitNeighbours(board, group, ctx));

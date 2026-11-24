@@ -283,7 +283,7 @@ test('150 random games on batch-2 levels never break the board', () => {
   assert.ok(seen.toggles > 0, 'makeup cases flipped');
   assert.ok(seen.opened > 0, 'curtains opened');
   for (const kind of Object.keys(OBSTACLES2)) {
-    if (OBSTACLES2[kind].generator) continue; // generators never break
+    if (OBSTACLES2[kind].generator || OBSTACLES2[kind].twist) continue; // generators never break; twists have their own tests
     assert.ok(seen.destroyed[kind] > 0, `no ${kind} was ever destroyed in 150 games`);
   }
   console.log(
