@@ -31,17 +31,21 @@ export function wait(ms) {
 }
 
 // Call step(t) repeatedly with t going from 0 to 1 over `ms`, in time with
-// the screen's refresh. Always finishes with step(1).
+// the screen's refresh. Always finishes with step(1). If drawing a frame
+// throws, the animation is cut short but still FINISHES: an error inside a
+// frame callback would otherwise leave the promise waiting forever, and the
+// gems it was moving would never count as at rest again (the board froze).
 export function tween(ms, step) {
   return new Promise((done) => {
-    if (!(ms > 0)) { step(1); done(); return; }
+    const safe = (t) => { try { step(t); return true; } catch (err) { console.error(err); return false; } };
+    if (!(ms > 0)) { safe(1); done(); return; }
     const hasRaf = typeof requestAnimationFrame === 'function';
     const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const t0 = now();
     const next = (fn) => (hasRaf ? requestAnimationFrame(fn) : setTimeout(fn, 16));
     function tick() {
       const t = Math.min(1, (now() - t0) / ms);
-      step(t);
+      if (!safe(t)) { done(); return; }
       if (t < 1) next(tick); else done();
     }
     next(tick);

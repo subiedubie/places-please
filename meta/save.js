@@ -40,6 +40,8 @@ export function defaultSave() {
     inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
     // Save the Violinist (meta/rescue.js); null until the first episode.
     rescue: null,
+    fixes: [],  // one-time repairs already made (meta/history.js)
+    errors: [], // the last errors seen (Settings > Export carries them)
   };
 }
 

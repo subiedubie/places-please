@@ -45,6 +45,24 @@ document.title = theme.name;
 // Display names for the power-ups, used in the results lines.
 const powerNames = Object.fromEntries(Object.entries(theme.powers || theme.powerups || {}).map(([k, v]) => [k, v.name]));
 const session = createSession(window.localStorage, { names: powerNames });
+
+// THE ERROR LOG: the last errors seen are kept in the save (save.errors), so
+// an exported save shows what went wrong on the phone. Written with the next
+// save; at most ERROR_KEEP lines.
+const ERROR_KEEP = 30;
+function keepError(parts) {
+  try {
+    const text = parts.map((p) => (p && p.stack) || String(p)).join(' ').slice(0, 600);
+    const s = session.save;
+    if (!Array.isArray(s.errors)) s.errors = [];
+    s.errors.push({ at: Date.now(), level: s.level, onLevel, text });
+    if (s.errors.length > ERROR_KEEP) s.errors.splice(0, s.errors.length - ERROR_KEEP);
+  } catch { /* never let the log itself break anything */ }
+}
+const consoleError = console.error.bind(console);
+console.error = (...parts) => { consoleError(...parts); keepError(parts); };
+addEventListener('error', (e) => keepError([e.error || e.message]));
+addEventListener('unhandledrejection', (e) => keepError([e.reason]));
 const ui = createScreens(theme);
 // The side games, rewards tray and album (ui/events.js). After a reward is
 // claimed or an event started, Home is drawn again if it is showing.

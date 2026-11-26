@@ -8,6 +8,10 @@ import { playEvents, playSwap, splitSteps } from './anim.js';
 
 const key = (x, y) => x + ',' + y;
 
+// A clip that has drawn nothing for this long while the app is on screen is
+// taken to be stuck and is dropped (the board then shows the rules' board).
+export const STALL_MS = 2500;
+
 // The cells (as numbers) that one step changes.
 function touchedBy(step, cols) {
   const out = new Set();
@@ -107,8 +111,17 @@ export function createLive({ paint, current, options, onEnd }) {
     for (const p of parts) for (const i of p) clip.pending.add(i);
     if (swap) for (const p of [swap.a, swap.b]) clip.pending.add(p.y * cols + p.x);
     clips.push(clip);
-    const draw = (board, overlay) => { clip.board = board; clip.overlay = overlay || null; soon(); };
-    try {
+    let lastDraw = Date.now();
+    const draw = (board, overlay) => { lastDraw = Date.now(); clip.board = board; clip.overlay = overlay || null; soon(); };
+    let watch = null;
+    const stalled = new Promise((resolve) => {
+      watch = setInterval(() => {
+        const hidden = typeof document !== 'undefined' && document.hidden;
+        if (hidden) { lastDraw = Date.now(); return; } // (nothing is drawn in the background)
+        if (Date.now() - lastDraw > STALL_MS) resolve('stalled');
+      }, 500);
+    });
+    const run = async () => {
       if (swap) {
         take(clip, [swap.a, swap.b].map((p) => p.y * cols + p.x));
         await playSwap(before, swap.a, swap.b, draw, swapMs, false);
@@ -127,10 +140,15 @@ export function createLive({ paint, current, options, onEnd }) {
         },
         lift: (x, y) => lifts.get(key(x, y)) || null,
       });
+    };
+    try {
+      const how = await Promise.race([run(), stalled]);
+      if (how === 'stalled') console.error('an animation stopped drawing; it was dropped');
     } catch (err) {
       console.error(err);
     }
-    clips.splice(clips.indexOf(clip), 1);
+    clearInterval(watch);
+    if (clips.includes(clip)) clips.splice(clips.indexOf(clip), 1);
     compose();
     onEnd();
   }

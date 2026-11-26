@@ -35,6 +35,8 @@ test('defaults', () => {
     logNow: null,
     inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
     rescue: null,
+    fixes: [],
+    errors: [],
   });
 });
 

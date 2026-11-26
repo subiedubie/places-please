@@ -23,7 +23,7 @@ import {
 import { fire } from './powers.js';
 import { stillNeeded } from './game.js'; // what a Ninja Star set off by a booster aims at
 import { settle } from './resolve.js';
-import { uncover } from './twists.js';
+import { uncover, syncTargets } from './twists.js';
 import { hasLegalMove, reshuffle } from './moves.js';
 
 // The four in-level boosters, in the order the booster bar shows them.
@@ -199,6 +199,7 @@ export function useBooster(game, kind, at) {
   events.push(...settle(board, dropContext(game), []));
   events.push(...uncover(board));
   recordEvents(game, events);
+  syncTargets(game); // counts of things still to come (masks from racks ...)
 
   // Never leave the player stuck.
   if (!hasLegalMove(board)) {

@@ -49,3 +49,27 @@ export function createHistory(getSave) {
     },
   };
 }
+
+// ONE-TIME REPAIR (version 27): level 474 froze on the phone and had to be
+// quit, which counted as a loss and ended the win streak (and with it the
+// Super Magic Ball). If the play log shows that quit, the streak is put back
+// to what it was before it, plus the wins since, as long as every level since
+// was won. Runs once (save.fixes). Returns true if the streak was changed.
+export function repairFrozenQuit(save, n = 474, tag = 'freeze-474') {
+  if (!save || !Array.isArray(save.history)) return false;
+  if (!Array.isArray(save.fixes)) save.fixes = [];
+  if (save.fixes.includes(tag)) return false;
+  const h = save.history;
+  let at = -1;
+  for (let i = h.length - 1; i >= 0; i--) if (h[i].n === n && !h[i].won) { at = i; break; }
+  if (at < 0) return false; // not reached yet: try again on a later launch
+  save.fixes.push(tag);
+  let before = 0;
+  for (let i = at - 1; i >= 0 && h[i].won; i--) before++;
+  const after = h.slice(at + 1);
+  if (!after.every((x) => x.won)) return false;
+  const streak = before + after.length;
+  if (!(streak > (save.streak || 0))) return false;
+  save.streak = streak;
+  return true;
+}

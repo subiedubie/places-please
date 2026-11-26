@@ -13,7 +13,7 @@ import { createAlbum } from './album.js'; // the card album
 import { createTeam } from './team.js'; // your company of computer castmates
 import { createLives } from './lives.js'; // hearts
 import { LIVES } from '../config/lives.js';
-import { createHistory } from './history.js'; // the log of every level played
+import { createHistory, repairFrozenQuit } from './history.js'; // the log of every level played
 
 // Which free power-ups the next level starts with, given the current win
 // streak. The steps are in config/economy.js (streakGift).
@@ -37,6 +37,8 @@ import {
 //   names - display names for power-ups, passed on to settleLevel
 export function createSession(storage, { now = () => Date.now(), names = {} } = {}) {
   const loaded = loadSave(storage);
+  // One-time repair: the streak lost to the level-474 freeze (meta/history.js).
+  if (repairFrozenQuit(loaded.save)) writeSave(storage, loaded.save);
 
   const session = {
     save: loaded.save, // the current save object
