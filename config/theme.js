@@ -23,11 +23,11 @@ export const theme = {
   pieces: [
     // These are strong colors on purpose: each one must stand out clearly
     // against a white cell. A pale color (light yellow, say) would not.
-    { name: 'Topaz',    color: '#e88a00', shape: 'topaz' },    // amber
-    { name: 'Ruby',     color: '#dc1f3c', shape: 'ruby' },     // red
-    { name: 'Sapphire', color: '#1766e0', shape: 'sapphire' }, // blue
-    { name: 'Emerald',  color: '#0c9a4e', shape: 'emerald' },  // green
-    { name: 'Amethyst', color: '#8a3ff0', shape: 'amethyst' }, // violet
+    { name: 'Topaz',    color: '#f0b400', shape: 'topaz' },    // yellow
+    { name: 'Ruby',     color: '#d4001a', shape: 'ruby' },     // red
+    { name: 'Sapphire', color: '#0030d0', shape: 'sapphire' }, // blue
+    { name: 'Emerald',  color: '#00862e', shape: 'emerald' },  // green
+    { name: 'Amethyst', color: '#5c0cc4', shape: 'amethyst' }, // purple
   ],
 
   // The power-ups. The short ids on the left ('spot-h' and so on) are what

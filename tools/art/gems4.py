@@ -11,11 +11,12 @@ TAU = math.tau
 
 # Darkest -> palest per stone: [side and shade, body, table glow]
 COLORS = {
-    'gem0': ('#b04000', '#ff9a00', '#fff09a'),   # topaz
-    'gem1': ('#a0001e', '#ff1d48', '#ffb0bc'),   # ruby
-    'gem2': ('#0a2fb0', '#1f7bff', '#bfe6ff'),   # sapphire
-    'gem3': ('#006a2a', '#12c45a', '#c4ffd2'),   # emerald
-    'gem4': ('#5a0fb0', '#b04bff', '#f0d4ff'),   # amethyst
+    # Bold primaries (v28, 26 Nov. 2026; v4 was lighter, candy-like).
+    'gem0': ('#8a4a00', '#ffc000', '#fff3a0'),   # topaz: yellow
+    'gem1': ('#6e0008', '#d4001a', '#ff8a8a'),   # ruby: red
+    'gem2': ('#00157a', '#0030d0', '#7fb0ff'),   # sapphire: blue
+    'gem3': ('#00330c', '#00782a', '#8ff0a8'),   # emerald: green
+    'gem4': ('#33007a', '#5c0cc4', '#d0a8ff'),   # amethyst: purple
 }
 
 
@@ -66,7 +67,7 @@ def build(name, rig):
     i = m.node_tree.nodes['Principled BSDF'].inputs
     i['Coat Roughness'].default_value = .02
     i['Emission Color'].default_value = (*rig.hexrgb(body), 1)
-    i['Emission Strength'].default_value = .18
+    i['Emission Strength'].default_value = 0
     i['Specular IOR Level'].default_value = .9
     tab = [(c[0] + (x - c[0]) * table, c[1] + (y - c[1]) * table) for x, y in ring]
     mid = [(c[0] + (x - c[0]) * .86, c[1] + (y - c[1]) * .86) for x, y in ring]
@@ -146,7 +147,7 @@ def post(out):
         a = np.asarray(im, float)
         rgb, al = a[..., :3], a[..., 3:] / 255
         g = rgb @ np.array([.3, .59, .11])
-        rgb = g[..., None] + (rgb - g[..., None]) * 1.18
+        rgb = g[..., None] + (rgb - g[..., None]) * 1.3
         rgb = np.clip(rgb, 0, 255)
         dk = np.array([int(dark[i:i + 2], 16) for i in (1, 3, 5)], float) * .55
         big = np.asarray(Image.fromarray((al[..., 0] * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(13)).filter(ImageFilter.GaussianBlur(1.5)), float)[..., None] / 255
