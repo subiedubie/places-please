@@ -37,6 +37,7 @@ export const RULES = {
   // Batch 1 obstacles
   crate:     'Make a match next to a Crate to break it.',
   hatbox:    'Make 2 matches next to a Hatbox to break it.',
+  pinkbox:   'Break a Hat Box with 3 matches next to it or power-ups. There is another block underneath: break that too.',
   trunk:     'Make 3 matches next to a Trunk to break it.',
   paint:     "Match the Paint Can's own colour next to it to break it.",
   dryice:    'Every match next to Dry Ice melts one square off its end.',

@@ -83,6 +83,16 @@ export default {
       rows,
       chests: cfg.chests.map((c, i) => ({ at: chestAt(inst, c), reward: scaleReward(c.reward, inst.scale), open: i < d.opened })),
       total: { have: total, need: goal },
+      // The play screen (ui/games/pot.js): the team counter and its chests.
+      game: {
+        kind: 'pot',
+        button: 'Play',
+        mine: d.mine,
+        opened: d.opened,
+        topPlaces: cfg.topBonus.places,
+        topBonus: scaleReward(cfg.topBonus.reward, inst.scale),
+        avatar: ctx.team?.()?.avatar || null,
+      },
     };
   },
 };

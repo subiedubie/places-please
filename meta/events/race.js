@@ -53,6 +53,16 @@ export default {
       summary: `${ordinal(you.place)} of ${rows.length}`,
       rows,
       prizes: prizeList(cfg.prizes, inst.scale),
+      // The play screen (ui/games/board.js): the podium and the list.
+      game: {
+        kind: 'board',
+        button: 'Play',
+        mode: 'race',
+        mult: inst.data.mult || 1,
+        multMax: cfg.multiplier ? cfg.multiplier.max : 1,
+        perWin: TIER_POINTS.slice(),
+        avatar: ctx.team?.()?.avatar || null,
+      },
     };
   },
 };

@@ -74,11 +74,25 @@ export default {
   view(inst, cfg, ctx) {
     const d = inst.data;
     const prizes = [{ place: 1, reward: scaleReward(cfg.reward, inst.scale) }];
+    // The play screen (ui/games/board.js): the podium and the list.
+    const game = {
+      kind: 'board',
+      button: d.run ? 'Play' : inst.state === 'offer' ? 'Start' : 'Results',
+      mode: 'sprint',
+      state: inst.state,
+      power: cfg.power,
+      minutes: cfg.minutes,
+      left: cfg.perDay - d.used,
+      perDay: cfg.perDay,
+      last: d.last,
+      avatar: ctx.team?.()?.avatar || null,
+    };
     if (!d.run) {
       const left = cfg.perDay - d.used;
       return {
         summary: left > 0 ? `${cfg.minutes} minutes - ${left} left today` : 'Back tomorrow',
         prizes,
+        game,
       };
     }
     const rows = board(inst, cfg, ctx.now);
@@ -87,6 +101,7 @@ export default {
       summary: `${ordinal(rows.find((r) => r.you).place)} of ${rows.length}`,
       rows,
       prizes,
+      game,
     };
   },
 };

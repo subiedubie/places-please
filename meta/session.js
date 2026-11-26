@@ -184,6 +184,7 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
       const firstAttempt = events.firstAttempt(game.level.n);
       session.save = applyResult(session.save, game, settlement);
       history.end(game, now());
+      if (settlement && settlement.coins > 0) events.count('coins', settlement.coins, now());
       if (game.status !== 'won') lives.lose(now());
       // Tell every running side game about this level. eventLines says what
       // it added to each; newRewards are the prizes just put in the tray.
@@ -213,6 +214,9 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
       session.game.status = 'lost';
       return session.finish();
     },
+
+    // Write the save now (used by screens that change it directly).
+    saveNow() { write(); },
 
     // Text for the Export button. Also records when the export happened.
     exportText() {
@@ -262,6 +266,7 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     detail: (id, t) => saved(events.detail(id, t)),
     start: (id, t) => saved(events.start(id, t)),
     act: (id, action, t) => saved(events.act(id, action, t)),
+    watch: (t) => events.watch(t),
     count: (name, n, t) => saved(events.count(name, n, t)),
   };
   // The Box Office.

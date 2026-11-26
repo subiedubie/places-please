@@ -51,6 +51,7 @@ export function block(kind, extra = {}) {
   const cell = { t: 'block', kind, hp: def.hits.length };
   if (extra.color !== undefined) cell.color = extra.color;
   if (extra.inside !== undefined && extra.inside !== null) cell.inside = extra.inside;
+  if (extra.under) cell.under = extra.under; // the block left underneath when it breaks
   if (def.size) {
     const w = extra.w ?? def.size[0];
     const h = extra.h ?? def.size[1];

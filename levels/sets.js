@@ -8,7 +8,7 @@ export const LAST = [1, 2, 4, 6, 9];
 // How much a Medium or Hard set piece's moves are cut (normal, medium, hard, -).
 export const FACTOR = [1, 0.95, 0.88, 0.88];
 export const FIRST = 4;
-export const ORDER = ['chandelier', 'rolldrop', 'squibs', 'vine', 'lifts', 'laser', 'cannon', 'flyer', 'cobwebs', 'masks', 'barrel',
+export const ORDER = ['chandelier', 'rolldrop', 'squibs', 'hatboxes', 'vine', 'lifts', 'laser', 'cannon', 'flyer', 'cobwebs', 'masks', 'barrel',
   'gallery', 'thunder', 'greasepot', 'rush', 'poster', 'acts', 'trail', 'bubbles', 'belt', 'carpets', 'flamepot', 'fusebox', 'straw',
   'trophies', 'dressing', 'tubes', 'gel', 'fireworks', 'wardrobes', 'weights', 'followspot', 'safes', 'rope', 'flowercart', 'dryice',
   'safetycurtain', 'programs', 'rocketrack', 'truss'];
@@ -18,7 +18,7 @@ export const MOVES = {
   rolldrop: 29, vine: 15, cannon: 15, barrel: 25, greasepot: 17, acts: 36, belt: 15, fusebox: 26, dressing: 22, fireworks: 20,
   followspot: 19, rope: 27, dryice: 21, truss: 21, chandelier: 20, laser: 15, masks: 25, flyer: 33, thunder: 18, poster: 17,
   bubbles: 21, flamepot: 24, trophies: 20, gel: 29, weights: 15, safes: 29, flowercart: 17, safetycurtain: 28, programs: 18,
-  rocketrack: 23, squibs: 27, cobwebs: 28, straw: 27, gallery: 16, tubes: 17, carpets: 15, wardrobes: 12, lifts: 15, trail: 24, rush: 99,
+  rocketrack: 23, hatboxes: 22, squibs: 27, cobwebs: 28, straw: 27, gallery: 16, tubes: 17, carpets: 15, wardrobes: 12, lifts: 15, trail: 24, rush: 99,
 };
 
 // THE BOARDS, drawn as text:   .  a gem    #  no cell there    -  covered by the
@@ -53,6 +53,9 @@ const MAPS = {
     '##.....##', '##.....##', '.........', '.S-...S-.', '.--...--.', '.........', '...S-....', '...--....', '.........', '##.....##'] },
   flowercart: { is: { o: { kind: 'flowercart' } }, map: [
     '.........', '#.......#', '..o......', '#.......#', '......o..', '#.......#', '..o......', '#.......#', '......o..', '.........'] },
+  // Hat Boxes: three hits each, then the Crate or Trunk underneath must go too.
+  hatboxes: { is: { H: { kind: 'pinkbox', under: 'crate' }, T: { kind: 'pinkbox', under: 'trunk' } }, map: [
+    '.........', '.........', '#.......#', '...HHH...', '...HTH...', '.........', '.........', 'HT.....TH', '.........', '.........'] },
   safetycurtain: { is: { S: { kind: 'safetycurtain', w: 4, h: 3 } }, map: [
     '#.......#', '.........', '.........', '.........', '.........', '.........', 'S---#S---', '----#----', '----#----'] },
   programs: { is: { P: { kind: 'programs', open: true }, Q: { kind: 'programs', open: false } }, map: [
@@ -147,6 +150,7 @@ const ASKS = {
   safes: (L, t) => [...t, { block: 'cashbox', need: 4 * L.blocks.length }],
   flowercart: (L, t) => [...t, { block: 'petals', need: 9 * L.blocks.length }],
   safetycurtain: (L, t) => [...t, { block: 'crate', need: 24 }],
+  hatboxes: (L, t) => [...t, { block: 'crate', need: L.blocks.filter((b) => b.under === 'crate').length }, { block: 'trunk', need: L.blocks.filter((b) => b.under === 'trunk').length }],
   programs: (L) => [{ block: 'program', need: 4 * L.blocks.length }],
   wardrobes: (L) => [{ block: 'glove', need: 5 * L.blocks.length }],
   cobwebs: (L) => [{ block: 'dust', need: L.blocks.length }],

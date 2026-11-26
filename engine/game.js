@@ -56,7 +56,7 @@ function placeObstacles(board, level, rng) {
     if (there === null) continue; // a hole, or off the board
     let inside = asCell(b.inside);
     if (b.kind === 'padlock' && !inside && isPiece(there)) inside = there;
-    const extra = { color: b.color, inside };
+    const extra = { color: b.color, inside, under: b.under };
     const def = OBSTACLES2[b.kind];
     if (b.w) extra.w = b.w;
     if (b.h) extra.h = b.h;

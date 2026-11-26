@@ -93,6 +93,9 @@ function startWalk(inst, ctx) {
   if (inst.state !== 'offer') return false;
   inst.state = 'running';
   inst.data.startedAt = ctx.now;
+  // A level lost BEFORE pressing Start does not count against the walk: its
+  // retry still counts as a first try (once, for the first stone).
+  inst.data.forgive = ctx.failedLevel ? ctx.failedLevel() : 0;
   return true;
 }
 
@@ -116,7 +119,9 @@ export default {
     if (inst.state !== 'running') return null;
     const d = inst.data;
     // A loss, or a win that was a retry: you slip off this stone.
-    if (!res.won || res.firstAttempt === false) {
+    const forgiven = d.stone === 0 && d.forgive && res.level === d.forgive;
+    d.forgive = 0;
+    if (!res.won || (res.firstAttempt === false && !forgiven)) {
       d.fell = d.stone + 1;
       inst.state = 'lost';
       return `Slipped off stone ${d.fell}: back tomorrow`;

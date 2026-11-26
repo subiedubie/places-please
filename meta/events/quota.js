@@ -54,6 +54,17 @@ export default {
       needs: inst.done ? null : Object.entries(stage.need).map(([kind, need]) => ({ kind, have: d.have[kind] || 0, need })),
       // When the current stage's time bonus runs out.
       bonusEndsAt: inst.done || !stage.bonus ? null : d.stageStart + stage.bonusMinutes * MINUTE,
+      // The play screen (ui/games/climb.js): the climb of stages.
+      game: {
+        kind: 'climb',
+        button: 'Play',
+        mode: 'quota',
+        step: d.stage,
+        stepCount: cfg.stages.length,
+        have: inst.done ? 0 : sum(d.have),
+        need: inst.done ? 0 : sum(stage.need),
+        bonus: inst.done || !stage.bonus ? null : scaleReward(stage.bonus, inst.scale),
+      },
     };
   },
 };

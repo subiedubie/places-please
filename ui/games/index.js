@@ -8,6 +8,18 @@ import { openPairs } from './pairs.js';
 import { openCannon } from './cannon.js';
 import { openPlinko } from './plinko.js';
 import { openPass } from './pass.js';
+import { openControl } from './control.js';
+import { openPursuit } from './pursuit.js';
+import { openTournament } from './tournament.js';
+import { openCircuit } from './circuit.js';
+import { openBattle } from './battle.js';
+import { openBoard } from './board.js';
+import { openLanes } from './lanes.js';
+import { openClimb } from './climb.js';
+import { openPot } from './pot.js';
+import { openBalloon } from './balloon.js';
+import { openPinata } from './pinata.js';
+import { openTour } from './tour.js';
 import { addPicture } from '../eventicons.js';
 import { hammer, TAU } from './kit.js';
 export { useRewardChips } from './kit.js';
@@ -20,6 +32,18 @@ export const GAMES = {
   cannon: openCannon,
   plinko: openPlinko,
   pass: openPass,
+  control: openControl,
+  pursuit: openPursuit,
+  tournament: openTournament,
+  circuit: openCircuit,
+  battle: openBattle,
+  board: openBoard,
+  lanes: openLanes,
+  climb: openClimb,
+  pot: openPot,
+  balloon: openBalloon,
+  pinata: openPinata,
+  tour: openTour,
 };
 
 // Badges, drawn out of 100.

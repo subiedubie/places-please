@@ -37,8 +37,13 @@ import archery from './archery.js';
 import pairs from './pairs.js';
 import voyage from './voyage.js';
 import parade from './parade.js';
+import control from './control.js';
+import pursuit from './pursuit.js';
+import tournament from './tournament.js';
+import circuit from './circuit.js';
+import battle from './battle.js';
 
-const MECHANICS = { race, ladder, season, company, chest, missions, streak, dash, sprint, quota, bracket, dig, firewalk, archery, pairs, voyage, parade };
+const MECHANICS = { race, ladder, season, company, chest, missions, streak, dash, sprint, quota, bracket, dig, firewalk, archery, pairs, voyage, parade, control, pursuit, tournament, circuit, battle };
 
 // More mechanics can be added from outside (each mini-game file registers
 // its own), so this file does not have to list every one.
@@ -81,6 +86,8 @@ export function createEvents(getSave, rewards, events = EVENTS) {
         return true;
       },
       counters: () => box(now).counters,
+      // The level last lost (a retry of it is not a first attempt).
+      failedLevel: () => getSave().events?.failedLevel || 0,
       team: () => getSave().team || null,
     };
   }
@@ -266,6 +273,24 @@ export function createEvents(getSave, rewards, events = EVENTS) {
     count(name, n, now) {
       box(now);
       count(name, n);
+    },
+
+    // What the running side games count during a level, for the markers on
+    // the board and the live counter: [{ id, title, color } | { id, title, powers }]
+    watch(now) {
+      const ev = sync(now);
+      const out = [];
+      for (const inst of Object.values(ev.instances)) {
+        const cfg = events[inst.key];
+        if (!cfg || inst.done || inst.state !== 'running') continue;
+        if (cfg.type === 'ladder' && cfg.collect) {
+          if (cfg.collect.color !== undefined) out.push({ id: inst.id, title: cfg.title, color: cfg.collect.color });
+          else if (cfg.collect.made) out.push({ id: inst.id, title: cfg.title, powers: cfg.collect.made === 'spot' ? ['spot-h', 'spot-v'] : [cfg.collect.made], made: true });
+        } else if (cfg.type === 'sprint' && cfg.power) {
+          out.push({ id: inst.id, title: cfg.title, powers: cfg.power === 'spot' ? ['spot-h', 'spot-v'] : [cfg.power] });
+        }
+      }
+      return out;
     },
 
     // Is the Season's gold row open now? (lives up to 8)

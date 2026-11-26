@@ -126,6 +126,9 @@ export const OBSTACLES2 = {
   pastepot:    { name: 'Paste Pot',      size: [1, 1], hits: ['any', 'any'], leaves: 'spike', feeds: 'poster', look: 'scrap', set: true },
   poster:      { name: 'Poster',         size: [4, 2], hits: [], charge: 8, release: 'bigblast', set: true },
   trophycase:  { name: 'Trophy Case',    size: [2, 2], hits: ['any', 'any', 'any', 'any', 'any'], leaves: 'drop', what: 'trophy', set: true },
+  // Batch 6 (25 Nov. 2026): a pink box that takes three hits and has another
+  // block underneath (`under` on the level's block: a Crate or a Trunk).
+  pinkbox:     { name: 'Hat Box',        size: [1, 1], hits: ['any', 'any', 'any'], leaves: 'under', set: true },
   safetycurtain: { name: 'Safety Curtain', size: [4, 3], hits: ['any', 'any', 'any', 'any', 'any'], leaves: 'under', set: true },
   gel:         { name: 'Color Gel',      size: [1, 1], hits: ['color', 'any'], set: true },
   programs:    { name: 'Program Stand',  size: [2, 2], hits: ['any', 'any', 'any', 'any'], toggles: true, product: 'program', set: true },

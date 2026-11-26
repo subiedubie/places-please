@@ -59,8 +59,19 @@ export default {
   view(inst, cfg, ctx) {
     const d = inst.data;
     const prizes = prizeList(cfg.prizes, inst.scale);
+    // The play screen (ui/games/lanes.js): racers climbing to the finish.
+    const game = {
+      kind: 'lanes',
+      button: inst.state === 'offer' ? 'Start' : 'Play',
+      mode: 'dash',
+      state: inst.state,
+      target: cfg.target,
+      place: d.place,
+      startedAt: d.startedAt,
+      avatar: ctx.team?.()?.avatar || null,
+    };
     if (inst.state === 'offer') {
-      return { summary: `First to ${cfg.target}`, progress: { have: 0, need: cfg.target }, prizes };
+      return { summary: `First to ${cfg.target}`, progress: { have: 0, need: cfg.target }, prizes, game };
     }
     const rows = racers(inst, cfg).map((r) => ({ name: r.name, score: r.scoreAt(ctx.now), you: false, finishAt: r.finishAt }));
     rows.push({ name: YOU, score: d.have, you: true });
@@ -71,6 +82,7 @@ export default {
       progress: { have: d.have, need: cfg.target },
       rows,
       prizes,
+      game,
     };
   },
 };

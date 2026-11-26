@@ -23,6 +23,18 @@ export default {
       summary: `${have}/${cfg.every}`,
       progress: { have, need: cfg.every },
       prizes: [{ place: 1, reward: cfg.reward }],
+      // The play screen (ui/games/climb.js): one tall step to the chest.
+      game: {
+        kind: 'climb',
+        button: 'Play',
+        mode: 'chest',
+        step: 0,
+        stepCount: 1,
+        have,
+        need: cfg.every,
+        count: inst.data.count,
+        reward: cfg.reward,
+      },
     };
   },
 };

@@ -18,7 +18,7 @@
 }
 .mg-chip.bump { animation: mg-bump .35s ease-out; }
 @keyframes mg-bump { 40% { transform: scale(1.18); } }
-.mg-box { position: relative; flex: 1 1 auto; min-height: 0; }
+.mg-box { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .mg-canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 .mg-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 6px 12px 12px; }
 .mg-foot .btn { font-family: var(--game); font-size: 18px; min-width: 140px; }
@@ -117,3 +117,10 @@
 .pass-fill { display: block; height: 100%; background: linear-gradient(#fff3a8, #ffc21c); }
 .pass-bank { margin: 14px 4px 4px; padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, .1); text-align: center; color: #ffe9a8; }
 .pass-bank p { margin: 4px 0 0; font: 14px/1.3 var(--game); }
+
+/* ---- The live side-game counter on the level screen (ui/watch.js) ---- */
+.hud-watch { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
+.hud-watch[hidden] { display: none; }
+.watch-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 9px 2px 3px; border-radius: 16px; background: linear-gradient(#fff6c0, #ffc21c); border: 2px solid #7a3c00; box-shadow: 0 2px 0 #7a3c00; color: #5a2a00; font: 16px/1 var(--game); }
+.watch-chip.bump { animation: mg-bump .35s ease-out; }
+.mg-chip:has(.mg-chip-num:empty) { display: none; }

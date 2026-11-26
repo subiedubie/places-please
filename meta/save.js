@@ -38,6 +38,8 @@ export function defaultSave() {
     // Boosters owned. spot/show/prism are chosen before a level; the other
     // four are used during one. Prices are in config/economy.js.
     inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
+    // Save the Violinist (meta/rescue.js); null until the first episode.
+    rescue: null,
   };
 }
 

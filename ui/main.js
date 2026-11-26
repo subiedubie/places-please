@@ -22,6 +22,8 @@ import { createShopUi } from './shop.js';
 import { fx } from './fx.js';
 import { flyTo } from './fly.js';
 import { initHelp, showLevelIntro } from './help.js'; // rule cards, "?" and How to play
+import { startWatch, markersOf, updateWatch } from './watch.js'; // side games counted on the board
+import { maybeOfferRescue } from './games/rescue.js'; // Save the Violinist, offered now and then
 
 // Copy the colors from config/theme.js into the page, so that file is the
 // one place to change them.
@@ -162,6 +164,7 @@ async function endLevel(settle) {
   if (result.status === 'won') await finale(game);
   await ui.finish(result, levelN, (box) => eventUi.resultsInto(box, result));
   goHome({ result, levelN, coinsBefore, before });
+  if (result.status === 'won') maybeOfferRescue({ getSave: () => session.save, persist: () => session.saveNow(), onChange: () => { if (!ui.$('screen-home').hidden) goHome(); } });
 }
 
 // After a win the moves left over become power-ups and all go off. A tap skips it.
@@ -196,6 +199,10 @@ function goLevel() {
   pressed = null;
   onLevel = true;
   ui.hideRoundBanner(); // the last level's banner on Home, if it is still up
+  // Side games that count things on this board: markers and a live counter.
+  const watch = (session.events.watch && session.events.watch(Date.now())) || [];
+  startWatch(watch);
+  if (stage && stage.setMarkers) stage.setMarkers(markersOf(watch));
   ui.hud(game);
   boosters.disarm();
   boosters.refreshBar(); // the booster bar under the board

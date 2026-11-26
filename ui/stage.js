@@ -27,7 +27,7 @@ const PROP_COLORS = {
   greasepot: 0xff9a24, goo: 0xff9a24, propcase: 0x3f5688, rope: 0x5a3a8a, cannon: 0x18b8a8,
   dimmer: 0x16a4d8, chandelier: 0x8ff0ff, flamepot: 0x7a3ac0, laser: 0xff3adf, thunder: 0xffd21f, flowercart: 0xff5f9a, maskrack: 0xc01f4a, mask: 0xfff6e6,
   grandsafe: 0x2aa070, pastepot: 0x2a8fe0, poster: 0xe0246e, trophycase: 0xa85a24, safetycurtain: 0x2f9aa8, gel: 0x8e96ad, programs: 0x3ab8d8, program: 0xfff4dc,
-  bubbles: 0xffb4dc, pin: 0xe8a04a, weight: 0x56638f, rocketrack: 0x4a34b8, squib: 0xff3f5a, cobweb: 0xeef2ff, straw: 0xf2b632, gallery: 0xf0183c, painttube: 0xb02af0, carpet: 0xe0183c, wardrobe: 0x9a4bff, glove: 0xfff4fb, lift: 0x39456e, lamp: 0xfff2a0, capsule: 0xe8a04a, trophy: 0xffc42a, duck: 0xffd21f, flyer: 0xe0246e,
+  bubbles: 0xffb4dc, pin: 0xe8a04a, weight: 0x56638f, rocketrack: 0x4a34b8, pinkbox: 0xff4fa8, squib: 0xff3f5a, cobweb: 0xeef2ff, straw: 0xf2b632, gallery: 0xf0183c, painttube: 0xb02af0, carpet: 0xe0183c, wardrobe: 0x9a4bff, glove: 0xfff4fb, lift: 0x39456e, lamp: 0xfff2a0, capsule: 0xe8a04a, trophy: 0xffc42a, duck: 0xffd21f, flyer: 0xe0246e,
 };
 
 export async function createStage(canvas, theme) {
@@ -191,6 +191,33 @@ export async function createStage(canvas, theme) {
     s.rotation = rot || 0;
     return s;
   }
+  // EVENT MARKERS: a small gold token on every piece (by color) or power-up
+  // (by kind) that counts for a side game running now. setMarkers() picks them.
+  let markers = null;
+  const marked = (c) => markers && ((c.t === 'piece' && markers.colors.includes(c.color)) || (c.t === 'power' && markers.powers.includes(c.kind)));
+  const markTex = () => shape('mark', 64, (g, n) => {
+    const r = n * 0.42;
+    g.fillStyle = '#3a1a00';
+    g.beginPath(); g.arc(n / 2, n / 2 + 2, r, 0, Math.PI * 2); g.fill();
+    const gr = g.createLinearGradient(0, n / 2 - r, 0, n / 2 + r);
+    gr.addColorStop(0, '#fff3a0'); gr.addColorStop(0.5, '#ffc21a'); gr.addColorStop(1, '#c07000');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(n / 2, n / 2, r * 0.86, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#6a1ab8';
+    g.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const rr = k % 2 ? r * 0.24 : r * 0.58;
+      const a = -Math.PI / 2 + (k * Math.PI) / 5;
+      g.lineTo(n / 2 + Math.cos(a) * rr, n / 2 + Math.sin(a) * rr);
+    }
+    g.fill();
+  });
+  function mark(x, y, k) {
+    const s = layout.cell;
+    const spr = glow(overPool, markTex(), x + s * 0.3 * k, y - s * 0.3 * k, s * 0.4, s * 0.4, 0xffffff, 1);
+    spr.blendMode = 'normal';
+  }
+
   function glow(p, tex, x, y, w, h, color, alpha, rot) {
     const s = p.next();
     s.texture = tex;
@@ -350,12 +377,14 @@ export async function createStage(canvas, theme) {
         if (off) { moving.push([c, x, y, off]); continue; }
         const held = o.pressed && o.pressed.x === x && o.pressed.y === y && (c.t === 'piece' || c.t === 'power');
         put(c, X(x), Y(y), held ? 1.1 : 1, held ? 1.1 : 1);
+        if (marked(c)) mark(X(x), Y(y), held ? 1.1 : 1);
       }
     }
     for (const [c, x, y, off] of moving) {
       const sx = off.sx > 0 ? off.sx : 1;
       const sy = off.sy > 0 ? off.sy : 1;
       put(c, X(x + off.dx), Y(y + off.dy) + (s / 2) * (1 - sy), sx, sy); // squashed onto its feet
+      if (marked(c)) mark(X(x + off.dx), Y(y + off.dy), 1);
     }
     for (const g of o.ghosts || []) {
       if (!(g.scale > 0.02)) continue;
@@ -548,6 +577,11 @@ export async function createStage(canvas, theme) {
       board = b;
       overlay = o;
       sync();
+      dirty = true;
+    },
+    // { colors: [piece colors], powers: [power-up kinds] } or null for none.
+    setMarkers(m) {
+      markers = m && (m.colors.length || m.powers.length) ? { colors: m.colors.slice(), powers: m.powers.slice() } : null;
       dirty = true;
     },
     show(on) {

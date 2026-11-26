@@ -5,6 +5,7 @@
 
 import { drawTargetIcon, drawPowerIcon } from './render.js';
 import { drawArt } from './art.js';
+import { updateWatch } from './watch.js'; // the live side-game counter
 import { ECONOMY } from '../config/economy.js';
 import { nameFor } from '../config/help.js';
 import { OBSTACLES, DROPPER } from '../config/obstacles.js';
@@ -168,6 +169,7 @@ export function createScreens(theme) {
   let targetCounts = []; // the number element of each chip
 
   function hud(game) {
+    updateWatch(game);
     // A bonus level (every 10th) shows its own name instead of the tier.
     $('screen-level').dataset.tier = game.level.tier ? String(game.level.tier) : '';
     $('hud-tier').textContent = game.level.bonus && theme.bonusName ? theme.bonusName : tierName(game.level.tier);

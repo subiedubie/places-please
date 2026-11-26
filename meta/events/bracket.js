@@ -83,11 +83,28 @@ export default {
   view(inst, cfg, ctx) {
     const d = inst.data;
     const prizes = prizeList(cfg.prizes, inst.scale);
+    // The play screen (ui/games/board.js): head to head, round by round.
+    const game = {
+      kind: 'board',
+      button: d.run ? 'Play' : inst.state === 'offer' ? 'Start' : 'Results',
+      mode: 'bracket',
+      state: inst.state,
+      round: d.run ? d.run.round : null,
+      rounds: cfg.rounds,
+      roundMinutes: cfg.roundMinutes,
+      entrants: cfg.entrants,
+      scores: d.run ? d.run.scores.slice() : null,
+      left: cfg.perDay - d.used,
+      perDay: cfg.perDay,
+      last: d.last,
+      avatar: ctx.team?.()?.avatar || null,
+    };
     if (!d.run) {
       const left = cfg.perDay - d.used;
       return {
         summary: left > 0 ? `${cfg.entrants} entrants - ${left} left today` : 'Back tomorrow',
         prizes,
+        game,
       };
     }
     const run = d.run;
@@ -102,6 +119,7 @@ export default {
       progress: { have: run.round, need: cfg.rounds },
       rows,
       prizes,
+      game,
     };
   },
 };

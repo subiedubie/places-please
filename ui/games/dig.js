@@ -143,7 +143,7 @@ export function openDig(api) {
     const W = g.w;
     const H = g.h;
     L.trayY = 8;
-    L.trayH = Math.min(96, H * 0.16);
+    L.trayH = Math.min(118, H * 0.18);
     L.gateY = L.trayY + L.trayH + 26;
     const top = L.gateY + 26;
     const bottom = H - 70;
@@ -151,11 +151,11 @@ export function openDig(api) {
     L.gw = L.s * G.cols;
     L.gh = L.s * G.rows;
     L.gx = Math.round((W - L.gw) / 2);
-    L.gy = Math.round(top + (bottom - top - L.gh) / 2);
+    L.gy = Math.round(top + Math.min(24, (bottom - top - L.gh) / 2));
     L.prizeY = L.gy + L.gh + 34;
     // tray slots: each gem drawn at a scale that fits
     const gems = G.gems;
-    const unit = Math.min(28, (W - 40) / gems.reduce((a, gm) => a + gm.w + 0.8, 0), (L.trayH - 30) / Math.max(...gems.map((gm) => gm.h)));
+    const unit = Math.min(36, (W - 40) / gems.reduce((a, gm) => a + gm.w + 0.8, 0), (L.trayH - 30) / Math.max(...gems.map((gm) => gm.h)));
     L.unit = unit;
     let x = (W - gems.reduce((a, gm) => a + gm.w * unit + unit * 0.8, -unit * 0.8)) / 2;
     L.slots = gems.map((gm) => {

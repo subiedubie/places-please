@@ -86,6 +86,17 @@ export default {
       progress: { have: Math.min(d.scrolls, next.need), need: next.need },
       steps: cfg.track.map((s, i) => ({ need: s.need, reward: s.reward, done: i < d.paid, current: i === d.paid })),
       missions,
+      // The play screen (ui/games/climb.js): the scroll track and the calls.
+      game: {
+        kind: 'climb',
+        button: 'Play',
+        mode: 'missions',
+        step: d.paid,
+        stepCount: cfg.track.length,
+        scrolls: d.scrolls,
+        have: d.paid >= cfg.track.length ? 0 : d.scrolls - (d.paid > 0 ? cfg.track[d.paid - 1].need : 0),
+        need: d.paid >= cfg.track.length ? 0 : next.need - (d.paid > 0 ? cfg.track[d.paid - 1].need : 0),
+      },
     };
   },
 };

@@ -82,6 +82,15 @@ export function openGame({ title, top = '#3a1078', bottom = '#12052e', onClose =
   fit();
   const onResize = () => fit();
   window.addEventListener('resize', onResize);
+  // Refit whenever the box changes size (the footer filling in, a rotation).
+  let ro = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    ro = new ResizeObserver(() => {
+      const r = box.getBoundingClientRect();
+      if (Math.round(r.width) !== g.w || Math.round(r.height) !== g.h) fit();
+    });
+    ro.observe(box);
+  }
 
   let last = 0;
   let raf = 0;
@@ -196,6 +205,7 @@ export function openGame({ title, top = '#3a1078', bottom = '#12052e', onClose =
     g.closed = true;
     cancelAnimationFrame(raf);
     window.removeEventListener('resize', onResize);
+    if (ro) ro.disconnect();
     root.remove();
     if (onClose) onClose();
   };
