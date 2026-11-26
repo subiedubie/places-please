@@ -138,7 +138,7 @@ export function openTour(api) {
     else footer(g, api);
     if (G.grid) g.note('Turn tiles until three coin bags match.');
     else if (G.mode === 'plain') g.note(`Win ${G.stages[0]} levels in a row. One slip and the run starts over.`);
-    else g.note(G.restart === 'start' ? 'Win levels in a row. A loss takes the tour back to the first town.' : 'Win levels in a row. A loss starts the stage again.');
+    else g.note(G.restart === 'start' ? 'Win levels in a row. A loss takes the tour back to the first town.' : 'Win levels in a row. A loss starts this town again.');
   }
   refresh();
   seen.set({ place: placeOf(v.game), falls: v.game.falls || 0 });
@@ -279,7 +279,7 @@ export function openTour(api) {
       target = G.restart === 'start' ? 0 : G.stages.slice(0, G.stage).reduce((a, b) => a + b, 0);
       if (shown <= target + 0.01) {
         backTrip = false;
-        g.toast(G.restart === 'start' ? 'A loss: the tour went back to the first town.' : 'A loss: the stage started again.', 2400);
+        g.toast(G.restart === 'start' ? 'A loss: the tour went back to the first town.' : 'A loss: this town starts again.', 2400);
         wait = 0.5;
       }
     } else target = placeOf(G);

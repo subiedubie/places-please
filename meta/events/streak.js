@@ -85,7 +85,7 @@ export default {
         d.have = 0;
         if (cfg.restartOnLoss === true) d.stage = 0;
         if (had > 0) d.falls++;
-        return had > 0 ? (cfg.restartOnLoss === true ? 'Streak lost: back to stage 1' : 'Streak lost') : null;
+        return had > 0 ? (cfg.restartOnLoss === true ? 'Streak lost: back to stage 1' : 'Streak lost: this town starts again') : null;
       }
       d.have++;
       const need = cfg.stages[d.stage];

@@ -609,9 +609,9 @@ export const EVENTS = {
   longtour: {
     type: 'streak',
     title: 'The Long Tour',
-    blurb: 'Five, seven, then ten wins in a row. One loss and the tour goes back to the first town. Each new town opens a prize grid: turn tiles until three match.',
+    blurb: 'Five, seven, then ten wins in a row. A loss starts the town you are in again; towns you finished stay finished. Each new town opens a prize grid: turn tiles until three match.',
     stages: [5, 7, 10],
-    restartOnLoss: true,
+    restartOnLoss: 'stage',
     gridCols: 3,
     gridRows: 4,
     tiers: ['Bronze', 'Silver', 'Gold'],

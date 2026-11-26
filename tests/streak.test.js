@@ -1,5 +1,6 @@
 // THE LONG TOUR: the streak's third form. Stages of wins in a row with no
-// rivals; a loss sends you back to the start of stage 1; the first clear of
+// rivals; a loss starts the current stage again (or, with restartOnLoss true,
+// goes back to stage 1); the first clear of
 // each stage opens a reveal grid of face-down tiles (turn until three of a
 // tier match). Plus a sizing check. The plain and lane forms are checked in
 // tests/events.test.js.
@@ -50,8 +51,24 @@ function turnAll(inst, cfg, c) {
   return out;
 }
 
-test('long tour: a loss sends you back to the start of stage 1', () => {
+test('long tour: a loss starts the current town again, finished towns stay finished', () => {
   const cfg = cfgOf('longtour');
+  assert.equal(cfg.restartOnLoss, 'stage');
+  const inst = fresh(cfg);
+  const c = ctx();
+  for (let i = 0; i < 5; i++) streak.onLevel(inst, cfg, W, c);
+  assert.equal(inst.data.stage, 1);
+  for (let i = 0; i < 4; i++) streak.onLevel(inst, cfg, W, c);
+  assert.match(streak.onLevel(inst, cfg, L, c), /this town starts again/);
+  assert.equal(inst.data.stage, 1, 'still in town 2');
+  assert.equal(inst.data.have, 0);
+  for (let i = 0; i < 7; i++) streak.onLevel(inst, cfg, W, c);
+  assert.equal(inst.data.stage, 2);
+  assert.equal(inst.data.grids.length, 2);
+});
+
+test('long tour (hard form, restartOnLoss true): a loss goes back to stage 1', () => {
+  const cfg = { ...cfgOf('longtour'), restartOnLoss: true };
   const inst = fresh(cfg);
   const c = ctx();
   for (let i = 0; i < 5; i++) streak.onLevel(inst, cfg, W, c);
@@ -179,10 +196,10 @@ test('sizing: The Long Tour (prints the finish rates for the report)', () => {
       console.log(`long tour ${cfg.stages.join('/')}, win rate ${rate}, ${wins} wins: ${(s.finish * 100).toFixed(0)}% finish; stages cleared 0/1/2/3 = ${s.cleared.map((x) => (x * 100).toFixed(0) + '%').join(' ')}`);
     }
   }
-  // Nearly everyone sees at least the first grid; finishing is hard.
+  // Restarting only the current town: a steady player usually finishes,
+  // but a 10-in-a-row town still takes work.
   const s = finishShare(cfg, 120, 0.8);
   assert.ok(s.cleared[0] < 0.02);
-  assert.ok(s.finish < 0.5, 'not trivial');
-  // At a 90% win rate a steady player finishes inside the weekend.
-  assert.ok(finishShare(cfg, 120, 0.9).finish > 0.6);
+  assert.ok(s.finish > 0.75 && s.finish < 1, 'usually finished, not certain');
+  assert.ok(finishShare(cfg, 80, 0.7).finish < 0.9, 'a weaker run can miss it');
 });
