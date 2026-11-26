@@ -22,6 +22,8 @@ import { flyTo } from './fly.js';
 import { drawArt, hasArt } from './art.js';
 import { drawEventIcon, eventColors } from './eventicons.js'; // the round picture badges
 import { theme } from '../config/theme.js';
+import { GAMES, useRewardChips } from './games/index.js'; // the side games' own play screens
+import { openPacks, drawCard, SET_LOOK } from './games/packs.js'; // opening card packs
 
 // ---- Words and numbers you may want to change ----
 
@@ -254,6 +256,38 @@ function paintCoin(ctx, s, cx = s / 2, cy = s / 2, r = s * 0.4) {
   ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2); ctx.stroke();
 }
 
+// A gold pack: a gold card with a star, a red one behind.
+function paintGoldPack(ctx, s) {
+  paintPack(ctx, s);
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-atop';
+  const g = ctx.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, 'rgba(255,240,140,.85)');
+  g.addColorStop(1, 'rgba(220,140,0,.85)');
+  ctx.fillStyle = g;
+  ctx.fillRect(s * 0.3, 0, s, s);
+  ctx.restore();
+}
+// A red heart (lives).
+function paintHeart(ctx, s) {
+  ctx.save();
+  ctx.translate(s / 2, s / 2 + s * 0.04);
+  ctx.fillStyle = '#ff2a55';
+  ctx.strokeStyle = '#6a0018';
+  ctx.lineWidth = Math.max(1, s * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(0, s * 0.36);
+  ctx.bezierCurveTo(-s * 0.55, 0, -s * 0.4, -s * 0.42, 0, -s * 0.18);
+  ctx.bezierCurveTo(s * 0.4, -s * 0.42, s * 0.55, 0, 0, s * 0.36);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.beginPath();
+  ctx.arc(-s * 0.15, -s * 0.12, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 // A pack of cards: two cards, the front one red with a gold diamond.
 function paintPack(ctx, s) {
   ctx.fillStyle = theme.ui.line;
@@ -368,6 +402,8 @@ export function renderReward(reward, size = 22) {
     if (count > 0) chip(kindIcon(kind, size), '×' + num(count));
   }
   if (reward.packs > 0) chip(icon(size, hasArt('cardpack') ? (ctx, s) => drawArt(ctx, 'cardpack', s / 2, s / 2, s, s) : paintPack, 'Card pack'), '×' + num(reward.packs));
+  if (reward.gold > 0) chip(icon(size, paintGoldPack, 'Gold card pack'), '×' + num(reward.gold));
+  if (reward.lives > 0) chip(icon(size, paintHeart, 'Unlimited lives'), minutesText(reward.lives));
   if (reward.boost && list(reward.boost.powers).length) {
     const c = chip(null, minutesText(reward.boost.minutes) + ': starts with');
     c.classList.add('ev-chip-boost');
@@ -380,6 +416,8 @@ export function renderReward(reward, size = 22) {
 // ---- The screens ----
 // session: the Session object.  onChange: called after a reward is claimed
 // or an event is started, so ui/main.js can redraw Home (coins may change).
+useRewardChips(renderReward); // the mini-games show prizes with the same chips
+
 export function createEvents(session, onChange) {
   const now = () => Date.now();
 
@@ -544,6 +582,36 @@ export function createEvents(session, onChange) {
       }));
     }
 
+    // Lives: the bubble is how many (or ∞); the time line is the next one.
+    const lv = getLives(t);
+    if (lv) {
+      grid.appendChild(badge({
+        ev: { id: 'lives', type: 'lives' },
+        name: 'Lives',
+        bubble: lv.unlimited > 0 ? '∞' : String(lv.have),
+        count: true,
+        time: lv.unlimited > 0 ? countdown(t + lv.unlimited, '', 'ev-b-time')
+          : lv.nextIn > 0 ? countdown(t + lv.nextIn, '', 'ev-b-time') : h('span', 'ev-b-time', 'Full'),
+        label: `Lives, ${lv.have}`,
+        onTap: openLives,
+      }));
+    }
+    // Your company: the bubble is how many castmates are asking for help.
+    const team = getTeam(t);
+    if (team) {
+      const asking = getAsks(t).length;
+      grid.appendChild(badge({
+        ev: { id: 'team', type: 'team' },
+        name: 'Company',
+        bubble: asking ? String(asking) : '',
+        dot: asking > 0,
+        count: true,
+        time: h('span', 'ev-b-time', 'Company'),
+        label: `Your company${asking ? `, ${asking} asking for help` : ''}`,
+        onTap: openTeam,
+      }));
+    }
+
     const events = getEvents(t);
     for (const ev of events) grid.appendChild(eventBadge(ev));
     if (!events.length) mount.appendChild(h('p', 'note ev-empty', TEXT.noEvents));
@@ -588,7 +656,7 @@ export function createEvents(session, onChange) {
     card.type = 'button';
     paintColors(card, ev);
     card.setAttribute('aria-label', [ev.title, ev.summary].filter(Boolean).join(', '));
-    card.onclick = () => openDetail(ev.id);
+    card.onclick = () => (ev.game && GAMES[ev.game.kind] ? playGame(ev.id) : openDetail(ev.id));
     const pic = h('span', 'show-pic');
     pic.appendChild(icon(92, (ctx, s) => drawEventIcon(ctx, ev, s, theme), ''));
     card.append(h('span', 'show-rays'), h('span', 'show-name', ev.title || 'Event'), pic);
@@ -768,11 +836,28 @@ export function createEvents(session, onChange) {
       time: countdown(ev.endsAt, '', 'ev-b-time'),
       label: [ev.title || 'Event', finished, ev.summary, ev.state === 'offer' ? 'tap to start' : '']
         .filter(Boolean).join(', '),
-      onTap: () => openDetail(ev.id),
+      onTap: () => (ev.game && GAMES[ev.game.kind] ? playGame(ev.id) : openDetail(ev.id)),
     });
   }
 
   // The Start button of an event that is on offer.
+  // Open an event's own play screen (the dig, the pinball ...).
+  function playGame(id) {
+    const ev = getDetail(id, now());
+    const open = ev && ev.game && GAMES[ev.game.kind];
+    if (!open) return false;
+    closeSheet();
+    open({
+      id,
+      view: () => getDetail(id, now()),
+      act: (action) => safe(() => session.events.act(id, action, now()), null),
+      play: () => { const b = document.getElementById('home-play'); if (b) b.click(); },
+      changed,
+      session,
+    });
+    return true;
+  }
+
   function startButton(id) {
     const btn = h('button', 'btn primary ev-start', 'Start');
     btn.type = 'button';
@@ -1034,7 +1119,14 @@ export function createEvents(session, onChange) {
         if (ev.summary) meta.appendChild(h('span', 'ev-summary', ev.summary));
         if (ev.endsAt !== null && ev.endsAt !== undefined) meta.appendChild(countdown(ev.endsAt, 'Ends in ', 'ev-time strong'));
         top.appendChild(meta);
-        if (ev.state === 'offer') {
+        const hasGame = ev.game && GAMES[ev.game.kind];
+        if (hasGame) {
+          const go = h('button', 'btn primary tall wide ev-start', ev.game.button || 'Play');
+          go.type = 'button';
+          go.onclick = () => playGame(ev.id);
+          top.appendChild(go);
+        }
+        if (ev.state === 'offer' && !hasGame) {
           const start = startButton(ev.id);
           start.classList.add('tall', 'wide');
           top.appendChild(start);
@@ -1107,8 +1199,9 @@ export function createEvents(session, onChange) {
           const claim = h('button', 'btn primary ev-claim', 'Claim');
           claim.type = 'button';
           claim.onclick = () => {
-            safe(() => session.rewards?.claim?.(item.id, now()), null);
+            const got = safe(() => session.rewards?.claim?.(item.id, now()), null);
             changed();
+            if (got && got.packs && got.packs.length) openPacks(got.packs, changed);
           };
           card.append(text, claim);
           body.appendChild(card);
@@ -1118,11 +1211,227 @@ export function createEvents(session, onChange) {
     });
   }
 
+  // ---- Lives and your company ----
+  const getLives = (t) => safe(() => session.lives?.view?.(t), null);
+  const getTeam = (t) => safe(() => session.team?.view?.(t), null);
+  const getAsks = (t) => safe(() => session.team?.requests?.(t), []) || [];
+
+  function heartsRow(lv) {
+    const row = h('div', 'ev-hearts');
+    for (let i = 0; i < Math.max(lv.max, lv.have); i++) row.appendChild(h('span', 'ev-heart' + (i < lv.have ? ' full' : ''), '♥'));
+    return row;
+  }
+
+  function openLives() {
+    openSheet({
+      cls: 'lives-sheet',
+      render(body, t) {
+        const lv = getLives(t);
+        if (!lv) return 'Lives';
+        const top = h('div', 'ev-top ev-lives-top');
+        top.appendChild(heartsRow(lv));
+        if (lv.unlimited > 0) top.appendChild(countdown(t + lv.unlimited, 'Unlimited lives for ', 'ev-time strong'));
+        else if (lv.nextIn > 0) top.appendChild(countdown(t + lv.nextIn, 'Next life in ', 'ev-time strong'));
+        else top.appendChild(h('p', 'note', 'Your lives are full.'));
+        if (lv.incoming > 0) top.appendChild(h('p', 'note', `${lv.incoming} on the way from your company.`));
+        body.appendChild(top);
+
+        const ask = h('div', 'card');
+        ask.appendChild(h('div', 'label', 'Ask your company'));
+        const next = safe(() => session.team?.nextLifeAsk?.(t), 0) || 0;
+        if (next > t) ask.appendChild(countdown(next, 'You can ask again in ', 'ev-time'));
+        else {
+          const b = h('button', 'btn primary', 'Ask for lives');
+          b.type = 'button';
+          b.onclick = () => { if (safe(() => session.lives.ask(now()), false)) floatBeside(b, 'Asked!'); changed(); };
+          ask.appendChild(b);
+        }
+        body.appendChild(ask);
+
+        const buy = h('div', 'card');
+        buy.appendChild(h('div', 'label', 'Refill'));
+        const b2 = h('button', 'btn', `Fill up for ${num(lv.refillCost)} coins`);
+        b2.type = 'button';
+        b2.disabled = lv.have >= lv.max || (session.save.coins || 0) < lv.refillCost;
+        b2.onclick = () => { safe(() => session.lives.refill(now()), false); changed(); };
+        buy.appendChild(b2);
+        body.appendChild(buy);
+        return 'Lives';
+      },
+    });
+  }
+
+  function openTeam() {
+    openSheet({
+      cls: 'team-sheet',
+      render(body, t) {
+        const team = getTeam(t);
+        if (!team) return 'Your company';
+        const top = h('div', 'ev-top');
+        top.appendChild(h('h2', 'ev-hero-title', team.name));
+        top.appendChild(h('p', 'note', `${team.size} members · you helped ${team.helps} ${team.helps === 1 ? 'time' : 'times'} this week`));
+        body.appendChild(top);
+
+        // Your avatar (shown in the Fire Walk and on the team list).
+        const av = h('div', 'card');
+        av.appendChild(h('div', 'label', 'Your avatar'));
+        const row = h('div', 'ev-avatars');
+        for (const name of Object.keys(AVATAR)) {
+          const b = h('button', 'ev-avatar-btn' + (team.avatar === name ? ' on' : ''), AVATAR[name]);
+          b.type = 'button';
+          b.setAttribute('aria-label', name);
+          b.onclick = () => { safe(() => session.team.setAvatar(name, now()), null); changed(); };
+          row.appendChild(b);
+        }
+        av.appendChild(row);
+        body.appendChild(av);
+
+        // Castmates asking for lives (cards are asked for in the album).
+        const asks = getAsks(t).filter((q) => q.kind === 'life');
+        const help = h('div', 'card');
+        help.appendChild(h('div', 'label', 'Castmates who need a life'));
+        if (!asks.length) help.appendChild(h('p', 'note', 'Nobody needs one right now.'));
+        for (const q of asks.slice(0, 8)) {
+          const r = h('div', 'ev-askrow');
+          r.appendChild(h('span', 'ev-avatar', AVATAR[q.member.avatar] || '🎭'));
+          const w = h('div', 'ev-askwords');
+          w.appendChild(h('div', 'ev-item-title', q.member.name));
+          w.appendChild(h('div', 'ev-item-sub', `Level ${num(q.member.level)} · needs a life`));
+          r.appendChild(w);
+          r.appendChild(h('span', 'ev-heart full', '♥'));
+          const b = h('button', 'btn primary', 'Help');
+          b.type = 'button';
+          b.onclick = () => {
+            if (safe(() => session.team.helped(q.id, now()), false)) floatBeside(b, 'Sent! +20 coins');
+            changed();
+          };
+          r.appendChild(b);
+          help.appendChild(r);
+        }
+        body.appendChild(help);
+
+        const members = h('div', 'card');
+        members.appendChild(h('div', 'label', 'Members'));
+        const sorted = list(team.members).slice().sort((a, b) => b.level - a.level);
+        sorted.forEach((m, i) => {
+          const r = h('div', 'ev-memrow');
+          r.append(h('span', 'ev-mem-place', String(i + 1)), h('span', 'ev-avatar small', AVATAR[m.avatar] || '🎭'), h('span', 'ev-mem-name', m.name), h('span', 'ev-mem-level', `Level ${num(m.level)}`));
+          members.appendChild(r);
+        });
+        body.appendChild(members);
+        return 'Your company';
+      },
+    });
+  }
+
   // ---- The card album ----
   const ownedIn = (set) => list(set.cards).filter((c) => c.owned).length;
 
+  // A card face (or its dark outline when missing) as a small canvas.
+  function cardPic(card, setIndex, w = 92) {
+    const hgt = Math.round(w * 1.4);
+    const c = document.createElement('canvas');
+    const d = Math.min(3, window.devicePixelRatio || 1);
+    c.width = Math.round(w * d);
+    c.height = Math.round(hgt * d);
+    c.style.width = w + 'px';
+    c.style.height = hgt + 'px';
+    c.className = 'ev-cardpic';
+    const ctx = c.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    const face = { ...card, setIndex };
+    if (card.owned === false) {
+      ctx.globalAlpha = 0.35;
+      drawCard(ctx, face, 1, 1, w - 2, hgt - 2, 0);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(30,10,60,.55)';
+      ctx.fillRect(1, 1, w - 2, hgt - 2);
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.round(w * 0.4)}px "Lilita One", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', w / 2, hgt * 0.42);
+    } else drawCard(ctx, face, 1, 1, w - 2, hgt - 2, 0.6);
+    return c;
+  }
+  const AVATAR = { piggy: '🐷', cat: '🐱', fox: '🦊', owl: '🦉', bunny: '🐰', bear: '🐻', frog: '🐸', panda: '🐼' };
+
+  function askBox(album, t) {
+    const box = h('div', 'card ev-ask');
+    box.appendChild(h('div', 'label', 'Ask your company'));
+    const ask = album.ask;
+    if (ask && ask.state === 'waiting') {
+      box.appendChild(h('p', 'note', `${ask.from} is sending you “${ask.name}”.`));
+      box.appendChild(countdown(ask.arrivesAt, 'Arrives in ', 'ev-time'));
+    } else if (album.canAskAt > t) {
+      if (ask && ask.state === 'arrived') box.appendChild(h('p', 'note', `${ask.from} sent you “${ask.name}”.`));
+      box.appendChild(countdown(album.canAskAt, 'Next request in ', 'ev-time'));
+    } else {
+      box.appendChild(h('p', 'note', `Ask for one card you are missing, once every ${album.askHours} hours. Gold cards can't be asked for.`));
+      const b = h('button', 'btn primary', 'Request a card');
+      b.type = 'button';
+      b.onclick = openAskPicker;
+      box.appendChild(b);
+    }
+    return box;
+  }
+
+  function asksBox(album) {
+    const asks = list(album.asks);
+    if (!asks.length) return null;
+    const box = h('div', 'card ev-asks');
+    box.appendChild(h('div', 'label', 'Castmates asking for cards'));
+    for (const q of asks.slice(0, 6)) {
+      const row = h('div', 'ev-askrow');
+      row.appendChild(h('span', 'ev-avatar', AVATAR[q.avatar] || '🎭'));
+      const words = h('div', 'ev-askwords');
+      words.appendChild(h('div', 'ev-item-title', q.member));
+      words.appendChild(h('div', 'ev-item-sub', `wants “${q.name}”`));
+      row.append(words, cardPic({ name: q.name, stars: q.stars, owned: true }, q.set, 40));
+      const give = h('button', 'btn ' + (q.canGive ? 'primary' : 'quiet'), q.canGive ? 'Give' : 'No spare');
+      give.type = 'button';
+      give.disabled = !q.canGive;
+      give.onclick = () => {
+        if (safe(() => session.albumGive?.(q.id, now()), false)) floatBeside(give, 'Thank you!');
+        changed();
+      };
+      row.appendChild(give);
+      box.appendChild(row);
+    }
+    return box;
+  }
+
+  function openAskPicker() {
+    openSheet({
+      onBack: openAlbum,
+      render(body, t) {
+        const album = getAlbum(t);
+        body.appendChild(h('p', 'note', 'Tap the card you want. A castmate will send it.'));
+        list(album && album.sets).forEach((set, s) => {
+          const missing = list(set.cards).map((c, k) => ({ c, k })).filter(({ c }) => !c.owned && !c.gold);
+          if (!missing.length) return;
+          body.appendChild(heading(set.name));
+          const grid = h('div', 'ev-cardgrid');
+          for (const { c, k } of missing) {
+            const b = h('button', 'ev-cardbtn');
+            b.type = 'button';
+            b.appendChild(cardPic({ ...c, owned: true }, s, 84));
+            b.onclick = () => {
+              safe(() => session.albumAsk?.(s, k, now()), false);
+              openAlbum();
+            };
+            grid.appendChild(b);
+          }
+          body.appendChild(grid);
+        });
+        return 'Request a card';
+      },
+    });
+  }
+
   function openAlbum() {
     openSheet({
+      cls: 'album-sheet',
       render(body, t) {
         const album = getAlbum(t);
         if (!album) {
@@ -1131,28 +1440,41 @@ export function createEvents(session, onChange) {
         }
         const top = h('div', 'ev-top');
         const meta = h('div', 'ev-meta');
-        if (album.month) meta.appendChild(h('span', 'ev-summary', album.month));
         meta.appendChild(h('span', 'ev-summary', `${num(album.owned)}/${num(album.total)} cards`));
         if (album.endsAt !== null && album.endsAt !== undefined) meta.appendChild(countdown(album.endsAt, 'Ends in ', 'ev-time strong'));
         top.appendChild(meta);
         top.appendChild(progressBar(album.owned || 0, album.total || 0));
         body.appendChild(top);
-
         if (album.grandPrize) {
           const grand = h('div', 'card ev-prizes');
           grand.appendChild(h('div', 'label', TEXT.grand + ' for the whole album'));
           grand.appendChild(renderReward(album.grandPrize, 24));
           body.appendChild(grand);
         }
+        body.appendChild(askBox(album, t));
+        const asks = asksBox(album);
+        if (asks) body.appendChild(asks);
 
-        // The nine sets, three across.
-        const grid = h('div', 'ev-grid');
+        // The nine plays, three across: emblem, a bar, the count, and a star
+        // once the gold card is in.
+        body.appendChild(heading('The nine plays'));
+        const grid = h('div', 'ev-grid ev-setgrid');
         list(album.sets).forEach((set, i) => {
           const have = ownedIn(set);
-          const cell = h('button', 'ev-set' + (set.done ? ' done' : ''));
+          const look = SET_LOOK[i % SET_LOOK.length];
+          const cell = h('button', 'ev-settile' + (set.done ? ' done' : ''));
           cell.type = 'button';
-          cell.appendChild(h('span', 'ev-set-name', set.name || `Set ${i + 1}`));
-          cell.appendChild(h('span', 'ev-set-count', (set.done ? '✓ ' : '') + `${have}/${list(set.cards).length}`));
+          cell.style.setProperty('--a', look.c[0]);
+          cell.style.setProperty('--b', look.c[1]);
+          cell.appendChild(h('span', 'ev-settile-icon', look.icon));
+          cell.appendChild(h('span', 'ev-settile-name', set.name || `Set ${i + 1}`));
+          const bar = h('span', 'ev-settile-bar');
+          const fill = h('span', 'ev-settile-fill');
+          fill.style.width = (have / Math.max(1, list(set.cards).length) * 100).toFixed(0) + '%';
+          bar.appendChild(fill);
+          cell.appendChild(bar);
+          const gold = list(set.cards).find((c) => c.gold);
+          cell.appendChild(h('span', 'ev-settile-count', (set.done ? '✓ ' : '') + `${have}/${list(set.cards).length}` + (gold && gold.owned ? ' ★' : '')));
           cell.onclick = () => openSet(i);
           grid.appendChild(cell);
         });
@@ -1177,22 +1499,24 @@ export function createEvents(session, onChange) {
         const meta = h('div', 'ev-meta');
         meta.appendChild(h('span', 'ev-summary', `${ownedIn(set)}/${list(set.cards).length} cards`));
         if (set.done) meta.appendChild(h('span', 'ev-tag won', 'Complete'));
-        if (album.endsAt !== null && album.endsAt !== undefined) meta.appendChild(countdown(album.endsAt, 'Ends in ', 'ev-time strong'));
         top.appendChild(meta);
         body.appendChild(top);
-
-        const grid = h('div', 'ev-grid');
-        for (const card of list(set.cards)) {
-          const cell = h('div', 'ev-card' + (card.owned ? ' owned' : ' missing'));
-          const stars = Math.max(0, Math.min(5, Number(card.stars) || 0));
-          const starEl = h('span', 'ev-stars', '★'.repeat(stars));
-          starEl.setAttribute('aria-label', stars + ' stars');
-          cell.append(starEl, h('span', 'ev-card-name', card.name || 'Card'));
-          if (!card.owned) cell.appendChild(h('span', 'ev-card-missing', 'Missing'));
+        const canAsk = !(album.canAskAt > t) && !(album.ask && album.ask.state === 'waiting');
+        const grid = h('div', 'ev-cardgrid');
+        list(set.cards).forEach((card, k) => {
+          const cell = h('div', 'ev-cardcell');
+          cell.appendChild(cardPic(card, index, 96));
+          if (card.count > 1) cell.appendChild(h('span', 'ev-copies', `×${card.count}`));
+          if (!card.owned && !card.gold && canAsk) {
+            const b = h('button', 'btn quiet ev-askbtn', 'Request');
+            b.type = 'button';
+            b.onclick = () => { safe(() => session.albumAsk?.(index, k, now()), false); changed(); };
+            cell.appendChild(b);
+          }
+          if (card.gold && !card.owned) cell.appendChild(h('span', 'ev-goldnote', 'Gold packs only'));
           grid.appendChild(cell);
-        }
+        });
         body.appendChild(grid);
-
         if (set.reward) {
           const prize = h('div', 'card ev-prizes');
           prize.appendChild(h('div', 'label', 'For finishing this set'));
@@ -1302,5 +1626,5 @@ export function createEvents(session, onChange) {
     mount.append(seg, h('p', 'note', TEXT.rivalsNote));
   }
 
-  return { home, snapshot, openRound, level, results, resultsInto, settings, openTray, openAlbum, openDetail, closeSheet, renderReward, openSheet, refreshSheet: () => drawSheet(false) };
+  return { home, snapshot, openRound, level, results, resultsInto, settings, openTray, openAlbum, openDetail, openLives, openTeam, closeSheet, renderReward, openSheet, refreshSheet: () => drawSheet(false) };
 }

@@ -44,24 +44,24 @@ test('draws are deterministic by seed', () => {
   const da = draw(a);
   assert.deepEqual(da, draw(b));
   assert.notDeepEqual(da, draw(c));
-  for (const pack of da) assert.ok(pack.length >= 3 && pack.length <= 5);
+  for (const pack of da) assert.ok(pack.length >= ALBUM.packSize[0] && pack.length <= ALBUM.packSize[1]);
 });
 
-test('rare cards are rarer, and duplicates pay coins', () => {
-  const { save, album } = setup();
+test('rare cards are rarer; extra copies are kept; gold cards only in gold packs', () => {
+  const { album } = setup();
   const seen = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let coins = 0;
   for (let i = 0; i < 400; i++) {
     for (const card of album.openPack(NOV)) {
       seen[card.stars]++;
-      if (card.isNew) assert.equal(card.coins, 0);
-      else assert.equal(card.coins, ALBUM.duplicateCoins[card.stars]);
-      coins += card.coins;
+      assert.equal(card.gold, false);
     }
   }
   assert.ok(seen[1] > seen[3] && seen[3] > seen[5]);
-  assert.ok(coins > 0);
-  assert.equal(save.coins, coins);
+  const v = album.view(NOV);
+  assert.ok(v.sets.some((set) => set.cards.some((c) => c.count > 1)));
+  const gold = album.openPack(NOV, true);
+  assert.ok(gold.length >= ALBUM.goldPackSize[0] && gold.length <= ALBUM.goldPackSize[1]);
+  assert.equal(gold.filter((c) => c.gold).length, 1);
 });
 
 test('a full set pays once, and the full album pays the grand prize once', () => {
@@ -88,17 +88,54 @@ test('a full set pays once, and the full album pays the grand prize once', () =>
 
   // Fill everything but one card of the last set, then draw to the end.
   ALBUM.sets.forEach((set, s) => set.cards.forEach((_, c) => {
-    if (!(s === 8 && c === 0)) save.album.owned[`${s}-${c}`] = 1;
+    if (!(s === 8 && c === ALBUM.goldCard)) save.album.owned[`${s}-${c}`] = 1;
   }));
   packs = 0;
   while (album.view(NOV).owned < 81 && packs < 3000) {
-    album.openPack(NOV);
+    album.openPack(NOV, true);
     packs++;
   }
   assert.equal(album.view(NOV).owned, 81);
   for (let i = 0; i < 20; i++) album.openPack(NOV);
   assert.equal(rewards.tray(NOV).filter((i) => i.title === 'Album complete').length, 1);
   assert.equal(save.album.setsPaid.length, 9);
+});
+
+test('asking: once a day, a missing plain card, and it arrives from a castmate', () => {
+  const { album } = setup();
+  assert.equal(album.ask(0, ALBUM.goldCard, NOV), false); // no gold cards
+  assert.equal(album.ask(0, 0, NOV), true);
+  assert.equal(album.ask(0, 1, NOV + 60000), false); // once a day
+  assert.equal(album.view(NOV).ask.state, 'waiting');
+  const later = NOV + 3 * 3600000;
+  const v = album.view(later);
+  assert.ok(v.ask.state === 'arrived' || v.ask.state === 'none');
+  if (v.ask.state === 'arrived') assert.ok(v.sets[0].cards[0].owned);
+  assert.equal(album.ask(0, 1, NOV + 25 * 3600000), true);
+});
+
+test('a steady month finishes the album (packs, gold packs and daily asks)', () => {
+  // About one pack a day from events, plus a gold pack every two or three
+  // days from big wins, plus one ask a day.
+  let finished = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const { album } = setup(seed);
+    for (let day = 0; day < 28; day++) {
+      const t = NOV - 15 * 86400000 + day * 86400000;
+      const at = new Date(2026, 10, 1 + day, 10).getTime();
+      album.openPack(at);
+      if (day % 3 !== 2) album.openPack(at);
+      if (day % 2 === 0) album.openPack(at, true);
+      const v = album.view(at);
+      const miss = [];
+      v.sets.forEach((set, s) => set.cards.forEach((c, k) => { if (!c.owned && !c.gold) miss.push([s, k]); }));
+      miss.sort((x, y) => ALBUM.sets[y[0]].stars[y[1]] - ALBUM.sets[x[0]].stars[x[1]]); // the rarest first
+      if (miss.length) album.ask(miss[0][0], miss[0][1], at);
+      void t;
+    }
+    if (album.view(new Date(2026, 10, 29, 23).getTime()).owned === 81) finished++;
+  }
+  assert.ok(finished >= 30, `finished ${finished} of 40`);
 });
 
 test('a new album starts on the 1st', () => {

@@ -5,15 +5,28 @@ export const ALBUM = {
   title: 'Playbill',
 
   // How many cards a pack holds: between these two numbers.
-  packSize: [3, 5],
-
+  packSize: [3, 6],
+  // A GOLD pack (from the big wins: a grand prize, first place, a finished
+  // streak) holds more cards, better ones, and always one gold card.
+  goldPackSize: [6, 8],
   // How likely each star rating is when a card is drawn. Bigger = more
   // often. (60 : 25 : 10 : 4 : 1 means a 5-star card is about 1 draw in 100.)
   starWeights: { 1: 60, 2: 25, 3: 10, 4: 4, 5: 1 },
-
-  // Coins paid for a card you already have, by its stars.
-  duplicateCoins: { 1: 5, 2: 10, 3: 25, 4: 60, 5: 150 },
-
+  goldStarWeights: { 1: 20, 2: 30, 3: 28, 4: 16, 5: 6 },
+  // In a pack, a card you do not have yet is this many times as likely as
+  // one you have (so the album fills, and the last cards do not stall).
+  newCardBoost: 4,
+  // The same for the gold card in a gold pack: nearly always one you lack.
+  newGoldBoost: 40,
+  // GOLD CARDS: the last card of every set has a gold frame. Gold cards come
+  // only from gold packs, and cannot be asked for or given away.
+  goldCard: 8,
+  // ASKING FOR A CARD: once every this many hours, you may ask your company
+  // for one card you are missing. A castmate sends it this many minutes
+  // later (between the two), almost always.
+  requestHours: 24,
+  requestMinutes: [10, 150],
+  requestChance: 0.95,
   // Paid once when all nine cards of a set are owned.
   setReward: { coins: 1000, boosters: { spot: 1, show: 1 } },
 

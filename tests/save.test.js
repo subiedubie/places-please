@@ -29,6 +29,10 @@ test('defaults', () => {
     events: { seed: 0, instances: {}, replaced: {}, gifts: {}, failedLevel: 0 },
     rewards: { nextId: 1, items: [], active: [] },
     album: { month: '', seed: 0, opened: 0, owned: {}, setsPaid: [], grandPaid: false },
+    team: null,
+    lives: null,
+    history: [],
+    logNow: null,
     inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },
   });
 });

@@ -29,6 +29,12 @@ export function defaultSave() {
     rewards: { nextId: 1, items: [], active: [] },
     // The monthly card album (meta/album.js).
     album: { month: '', seed: 0, opened: 0, owned: {}, setsPaid: [], grandPaid: false },
+    // Your company of computer castmates (meta/team.js); made on first look.
+    team: null,
+    // Lives (meta/lives.js) and the log of every level played (meta/history.js).
+    lives: null,
+    history: [],
+    logNow: null,
     // Boosters owned. spot/show/prism are chosen before a level; the other
     // four are used during one. Prices are in config/economy.js.
     inventory: { spot: 0, show: 0, prism: 0, drill: 0, stageleft: 0, trapdoor: 0, coinflip: 0 },

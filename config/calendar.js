@@ -19,10 +19,14 @@ export const CALENDAR = {
     { slot: 'missions', period: 'week', events: ['callsheet'] },
     { slot: 'weekly', period: 'week', events: ['weekly'] },
     { slot: 'encore', period: 'forever', events: ['encore'] },
+    { slot: 'firewalk', period: 'forever', events: ['firewalk'] },
+    { slot: 'parade', period: 'firstFriday10', events: ['parade'] },
   ],
 
   // Added Monday to Thursday.
   weekday: [
+    { slot: 'dig', events: ['understage'] },
+    { slot: 'voyage', events: ['matinee'] },
     { slot: 'race', events: ['critics', 'critics-streak'] },
     { slot: 'collect', events: ['props-rose', 'techweek', 'props-star'], replace: true },
     { slot: 'group', events: ['company'], replace: true },
@@ -32,6 +36,8 @@ export const CALENDAR = {
 
   // Added Friday to Sunday.
   weekend: [
+    { slot: 'archery', events: ['bullseye'] },
+    { slot: 'pairs', events: ['costumepairs'] },
     { slot: 'race', events: ['critics-streak', 'critics'] },
     { slot: 'collect', events: ['techweek', 'props-lantern', 'props-star'], replace: true },
     { slot: 'group', events: ['dash'], replace: true },

@@ -15,7 +15,7 @@ const MINUTE = 60 * 1000;
 
 // getSave: a function returning the current save object.
 // openPack(now): opens one card pack (meta/album.js); may be left out.
-export function createRewards(getSave, { openPack = null } = {}) {
+export function createRewards(getSave, { openPack = null, lives = null } = {}) {
   // Rewards added since the list was last taken (for finish()'s newRewards).
   let fresh = [];
 
@@ -92,10 +92,17 @@ export function createRewards(getSave, { openPack = null } = {}) {
         b.active.push({ powers: reward.boost.powers.slice(), endsAt: now + reward.boost.minutes * MINUTE });
       }
       const cards = [];
-      for (let i = 0; i < (reward.packs || 0); i++) {
-        if (openPack) cards.push(...openPack(now));
-      }
-      return { cards };
+      const packs = []; // each pack on its own, for the opening screen
+      const open = (gold) => {
+        if (!openPack) return;
+        const got = openPack(now, gold);
+        packs.push({ gold, cards: got });
+        cards.push(...got);
+      };
+      for (let i = 0; i < (reward.packs || 0); i++) open(false);
+      for (let i = 0; i < (reward.gold || 0); i++) open(true);
+      if (reward.lives && lives) lives.unlimited(reward.lives, now);
+      return { cards, packs };
     },
 
     // Timed boosts running now: [{ powers, endsAt }].

@@ -31,8 +31,18 @@ import dash from './dash.js';
 import sprint from './sprint.js';
 import quota from './quota.js';
 import bracket from './bracket.js';
+import dig from './dig.js';
+import firewalk from './firewalk.js';
+import archery from './archery.js';
+import pairs from './pairs.js';
+import voyage from './voyage.js';
+import parade from './parade.js';
 
-const MECHANICS = { race, ladder, season, company, chest, missions, streak, dash, sprint, quota, bracket };
+const MECHANICS = { race, ladder, season, company, chest, missions, streak, dash, sprint, quota, bracket, dig, firewalk, archery, pairs, voyage, parade };
+
+// More mechanics can be added from outside (each mini-game file registers
+// its own), so this file does not have to list every one.
+export function addMechanic(type, m) { MECHANICS[type] = m; }
 
 // getSave: a function returning the current save object.
 // rewards: the tray (meta/rewards.js).
@@ -45,6 +55,9 @@ export function createEvents(getSave, rewards, events = EVENTS) {
     if (!ev.instances || typeof ev.instances !== 'object') ev.instances = {};
     if (!ev.replaced || typeof ev.replaced !== 'object') ev.replaced = {};
     if (!ev.gifts || typeof ev.gifts !== 'object') ev.gifts = {};
+    // Running totals other events can watch (Mission Control): cards
+    // collected, gems dug up, levels won, coins earned, event prizes won.
+    if (!ev.counters || typeof ev.counters !== 'object') ev.counters = {};
     return ev;
   }
 
@@ -57,8 +70,25 @@ export function createEvents(getSave, rewards, events = EVENTS) {
       pay(reward, title, scaled = true) {
         if (!reward) return;
         rewards.add(scaled ? scaleReward(reward, inst.scale) : reward, title, cfg.title, now);
+        count('prizes', 1);
       },
+      count,
+      // Take coins from the player (the gold row). true if there were enough.
+      spend(coins) {
+        const s = getSave();
+        if ((s.coins || 0) < coins) return false;
+        s.coins -= coins;
+        return true;
+      },
+      counters: () => box(now).counters,
+      team: () => getSave().team || null,
     };
+  }
+
+  // Add to one of the running totals (see box()).
+  function count(name, n = 1) {
+    const c = getSave().events?.counters;
+    if (c && n) c[name] = (c[name] || 0) + n;
   }
 
   // Start the event for a slot. n = 0 for the block's own event (it starts
@@ -215,8 +245,33 @@ export function createEvents(getSave, rewards, events = EVENTS) {
       }
       // Remember a lost level, so the next try at it is not a first attempt.
       ev.failedLevel = result.won ? 0 : result.level;
+      if (result.won) count('wins', 1);
       sync(now); // start replacements for anything just completed
       return { eventLines, newRewards: rewards.takeFresh() };
+    },
+
+    // A move made inside an event's own play screen (digging a block,
+    // dropping a ball ...). Returns what the mechanic says happened, or null.
+    act(id, action, now) {
+      const inst = sync(now).instances[id];
+      const cfg = inst && events[inst.key];
+      const m = cfg && MECHANICS[cfg.type];
+      if (!m || !m.act) return null;
+      const out = m.act(inst, cfg, action, ctxFor(inst, cfg, now));
+      sync(now); // a finished event makes room for the next one
+      return out;
+    },
+
+    // Add to a running total from outside the events (cards, coins).
+    count(name, n, now) {
+      box(now);
+      count(name, n);
+    },
+
+    // Is the Season's gold row open now? (lives up to 8)
+    passGold(now) {
+      const ev = getSave().events;
+      return Object.values(ev?.instances || {}).some((i) => events[i.key]?.type === 'season' && i.data && i.data.gold && (i.endsAt === null || now < i.endsAt));
     },
 
     // Was this the first attempt at level number `n`?

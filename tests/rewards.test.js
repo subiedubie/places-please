@@ -90,6 +90,6 @@ test('packs are opened on claim and the cards are returned', () => {
   const session = createSession(fakeStorage(), { now: () => clock });
   session.save.rewards.items.push({ id: 'p', title: 'Pack', from: 'Test', expiresAt: clock + HOUR, reward: { packs: 2 } });
   const { cards } = session.rewards.claim('p', clock);
-  assert.ok(cards.length >= 6 && cards.length <= 10);
+  assert.ok(cards.length >= 6 && cards.length <= 12);
   assert.ok(session.album(clock).owned > 0);
 });

@@ -1,0 +1,119 @@
+/* THE MINI-GAME SCREENS (ui/games/kit.js): full screen, the stage colours of
+   the game, the marquee title, a gold counter chip and Lilita One buttons. */
+.mg {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: linear-gradient(var(--mg-top), var(--mg-bottom)); color: #fff;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  font-family: var(--game); touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.mg-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 8px 10px 4px; }
+.mg-back {
+  font: 17px/1 var(--game); color: #fff; padding: 9px 14px; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(#8a4bff, #4a14b8); border: 2px solid #ffc83d; box-shadow: 0 3px 0 #7a3c00;
+}
+.mg-title.marquee { font-size: 19px; padding: 6px 10px 7px; border-width: 8px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mg-chip {
+  display: flex; align-items: center; gap: 4px; padding: 3px 12px 3px 5px; border-radius: 20px;
+  background: linear-gradient(#fff6c0, #ffc21c); border: 2px solid #7a3c00; box-shadow: 0 3px 0 #7a3c00; color: #5a2a00; font: 22px/1 var(--game);
+}
+.mg-chip.bump { animation: mg-bump .35s ease-out; }
+@keyframes mg-bump { 40% { transform: scale(1.18); } }
+.mg-box { position: relative; flex: 1 1 auto; min-height: 0; }
+.mg-canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+.mg-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 6px 12px 12px; }
+.mg-foot .btn { font-family: var(--game); font-size: 18px; min-width: 140px; }
+.mg-note { width: 100%; margin: 0; text-align: center; font: 15px/1.3 var(--game); color: #ffe9a8; text-shadow: 0 1px 2px #000; }
+.mg-toast {
+  position: absolute; left: 50%; top: 84px; transform: translate(-50%, -10px); opacity: 0; pointer-events: none; transition: .25s;
+  padding: 8px 16px; border-radius: 16px; background: rgba(20, 6, 50, .9); border: 2px solid #ffc83d; font: 17px/1.2 var(--game); white-space: nowrap;
+}
+.mg-toast.on { opacity: 1; transform: translate(-50%, 0); }
+.mg-prize-back { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: rgba(10, 2, 30, .62); animation: mg-fade .2s; }
+@keyframes mg-fade { from { opacity: 0; } }
+.mg-prize {
+  position: relative; overflow: hidden; width: min(88vw, 360px); padding: 22px 18px 18px; border-radius: 26px; text-align: center;
+  background: radial-gradient(circle at 50% 30%, #ff5a8a, #8a0a4a); border: 5px solid #ffc83d;
+  box-shadow: inset 0 0 0 2px rgba(60, 20, 0, .55), 0 6px 0 #b87400, 0 16px 30px rgba(0, 0, 0, .5); animation: mg-pop .5s cubic-bezier(.2, 1.6, .4, 1);
+}
+@keyframes mg-pop { from { transform: scale(.4) rotate(-8deg); opacity: 0; } }
+.mg-prize > * { position: relative; }
+.mg-prize > .show-rays { position: absolute; inset: -60%; animation: mg-spin 12s linear infinite; }
+@keyframes mg-spin { to { transform: rotate(360deg); } }
+.mg-prize-title { font: 30px/1.1 var(--show); text-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
+.mg-prize-sub { margin: 6px 0 0; font: 16px/1.3 var(--game); }
+.mg-prize-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 6px; padding: 10px; border-radius: 16px; background: rgba(255, 255, 255, .94); color: #2a1a4a; font-size: 20px; }
+.mg-prize-note { margin: 6px 0 12px; font: 14px/1.2 var(--game); opacity: .9; }
+.mg-prize-ok { min-width: 180px; }
+@media (prefers-reduced-motion: reduce) { .mg-prize, .mg-chip.bump { animation: none; } .mg-prize > .show-rays { animation: none; } }
+
+/* ---- The album (ui/events.js) ---- */
+.ev-cardpic { display: block; filter: drop-shadow(0 3px 3px rgba(40, 10, 80, .3)); }
+.ev-cardgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; justify-items: center; margin: 8px 0 14px; }
+.ev-cardcell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ev-copies { position: absolute; top: 4px; right: -4px; padding: 2px 7px; border-radius: 10px; background: #5a24b8; color: #fff; font: 13px/1.2 var(--game); border: 2px solid #ffc83d; }
+.ev-askbtn { padding: 4px 10px; font-size: 13px; min-height: 0; }
+.ev-goldnote { font: 11px/1.2 var(--game); color: #9a6000; }
+.ev-cardbtn { padding: 0; border: 0; background: none; cursor: pointer; }
+.ev-ask, .ev-asks { margin: 10px 0; }
+.ev-askrow { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(80, 40, 140, .12); }
+.ev-avatar { font-size: 28px; line-height: 1; }
+.ev-setgrid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ev-settile {
+  appearance: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 9px; border-radius: 16px; cursor: pointer; color: #fff;
+  background: radial-gradient(circle at 50% 30%, var(--a), var(--b)); border: 3px solid #ffc83d; box-shadow: 0 4px 0 #b87400; font: inherit;
+}
+.ev-settile.done { border-color: #3ee07a; box-shadow: 0 4px 0 #0a7a3a; }
+.ev-settile-icon { font-size: 30px; line-height: 1.1; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .4)); }
+.ev-settile-name { font: 12px/1.15 var(--game); text-align: center; min-height: 2.3em; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.ev-settile-bar { width: 90%; height: 8px; border-radius: 5px; background: rgba(0, 0, 0, .4); overflow: hidden; }
+.ev-settile-fill { display: block; height: 100%; background: linear-gradient(#fff3a8, #ffc21c); }
+.ev-settile-count { font: 14px/1 var(--game); }
+
+/* ---- Lives and the company (ui/events.js) ---- */
+.ev-hearts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin: 6px 0; }
+.ev-heart { font: 34px/1 var(--game); color: #d8cfe8; text-shadow: 0 2px 0 rgba(60, 20, 90, .25); }
+.ev-heart.full { color: #ff2a55; text-shadow: 0 2px 0 #7a0020, 0 0 10px rgba(255, 60, 100, .5); }
+.ev-askrow .ev-heart { font-size: 24px; }
+.ev-lives-top { text-align: center; }
+.ev-avatars { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ev-avatar-btn { font-size: 30px; line-height: 1; padding: 6px; border-radius: 14px; border: 3px solid transparent; background: rgba(120, 80, 200, .1); cursor: pointer; }
+.ev-avatar-btn.on { border-color: #ffc83d; background: #fff6d0; box-shadow: 0 3px 0 #b87400; }
+.ev-avatar.small { font-size: 20px; }
+.ev-memrow { display: grid; grid-template-columns: 26px 28px 1fr auto; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid rgba(80, 40, 140, .1); font: 15px/1.2 var(--game); }
+.ev-mem-place { color: #8a6ab8; text-align: right; }
+.ev-mem-level { color: #6a5a8a; font-size: 13px; }
+
+/* ---- The Season (ui/games/pass.js) ---- */
+.pass { touch-action: auto; }
+.pass-keys { padding: 4px 12px; border-radius: 18px; background: linear-gradient(#fff6c0, #ffc21c); border: 2px solid #7a3c00; color: #5a2a00; font: 20px/1 var(--game); }
+.pass-gold { margin: 6px 12px; padding: 10px 14px; border-radius: 18px; text-align: center; color: #4a2000;
+  background: linear-gradient(135deg, #fff6b0, #ffc21a 50%, #ffe680); border: 3px solid #7a4000; box-shadow: 0 4px 0 #7a4000; }
+.pass-gold.open { padding: 6px 12px; }
+.pass-gold.pop { animation: mg-pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+.pass-gold-title { font: 20px/1.1 var(--show); }
+.pass-gold-perks { font: 13px/1.3 var(--game); margin-top: 2px; }
+.pass-perks { margin: 6px 0 8px; padding: 0; list-style: none; font: 14px/1.4 var(--game); }
+.pass-perks li::before { content: '★ '; color: #b06a00; }
+.pass-buy { min-width: 200px; }
+.pass-track { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 10px 12px; touch-action: pan-y; }
+.pass-cols { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 1fr 92px 1fr; text-align: center; padding: 6px 0; font: 15px/1 var(--game); background: var(--mg-top); }
+.pass-cols .g { color: #ffd84a; }
+.pass-row { display: grid; grid-template-columns: 1fr 92px 1fr; gap: 6px; align-items: center; margin: 6px 0; }
+.pass-prize { position: relative; min-height: 58px; display: grid; place-items: center; padding: 6px; border-radius: 14px; background: #fff; color: #2a1a4a; box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
+.pass-prize .ev-reward { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; font-size: 14px; }
+.pass-prize.gold { background: linear-gradient(#fff6c8, #ffd85a); border: 2px solid #b07000; }
+.pass-prize.gold.big { background: linear-gradient(135deg, #fff6b0, #ffc21a, #ffe680); border-width: 3px; }
+.pass-prize.locked > .ev-reward { filter: grayscale(.6) opacity(.55); }
+.pass-lock { position: absolute; right: 4px; top: 2px; font-size: 16px; }
+.pass-tick { position: absolute; right: 6px; top: 2px; color: #0a9a40; font: 20px/1 var(--game); }
+.pass-row.done .pass-prize { opacity: .7; }
+.pass-node { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.pass-step { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; font: 20px/1 var(--game);
+  background: linear-gradient(#8a4bff, #4a14b8); border: 3px solid #ffc83d; box-shadow: 0 3px 0 #7a3c00; }
+.pass-row.done .pass-step { background: linear-gradient(#3ee07a, #0a8a3a); }
+.pass-row.current .pass-step { transform: scale(1.15); box-shadow: 0 0 0 4px rgba(255, 220, 120, .5), 0 3px 0 #7a3c00; }
+.pass-need { font: 13px/1 var(--game); color: #ffe9a8; }
+.pass-bar { width: 84px; height: 10px; border-radius: 6px; background: rgba(0, 0, 0, .45); border: 2px solid #fff; overflow: hidden; }
+.pass-fill { display: block; height: 100%; background: linear-gradient(#fff3a8, #ffc21c); }
+.pass-bank { margin: 14px 4px 4px; padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, .1); text-align: center; color: #ffe9a8; }
+.pass-bank p { margin: 4px 0 0; font: 14px/1.3 var(--game); }

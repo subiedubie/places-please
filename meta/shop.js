@@ -121,6 +121,7 @@ export function attachShop(session, write, economy = ECONOMY) {
     if (events.length > 0 && events[0].type === 'invalid') return events;
     session.save = spend(session.save, kind);
     session.save.current = serialize(session.game);
+    if (session.history) session.history.note(kind);
     write();
     return events;
   };
@@ -144,6 +145,7 @@ export function attachShop(session, write, economy = ECONOMY) {
     if (!next) return false;
     addMoves(game, extraMovesCount(economy));
     session.save = next;
+    if (session.history) session.history.note('moves');
     session.save.current = serialize(game);
     write();
     return true;

@@ -116,10 +116,17 @@ test('calendar handles a month end inside a block', () => {
 });
 
 test('the schedule lists always-on events plus the block, and turns alternate', () => {
-  const weekdaySlots = schedule(MON + HOUR);
-  assert.equal(weekdaySlots.length, CALENDAR.always.length + CALENDAR.weekday.length);
-  const weekendSlots = schedule(at(2026, 11, 21, 9));
-  assert.equal(weekendSlots.length, CALENDAR.always.length + CALENDAR.weekend.length);
+  // (The parade runs only ten days a month, so it is left out of the count.)
+  const always = CALENDAR.always.filter((e) => e.period !== 'firstFriday10').length;
+  const noParade = (list) => list.filter((s) => s.slot !== 'parade');
+  const weekdaySlots = noParade(schedule(MON + HOUR));
+  assert.equal(weekdaySlots.length, always + CALENDAR.weekday.length);
+  const weekendSlots = noParade(schedule(at(2026, 11, 21, 9)));
+  assert.equal(weekendSlots.length, always + CALENDAR.weekend.length);
+  // The parade: from the first Friday of the month, for ten days.
+  assert.ok(schedule(at(2026, 11, 6, 9)).some((s) => s.slot === 'parade'));
+  assert.ok(schedule(at(2026, 11, 15, 9)).some((s) => s.slot === 'parade'));
+  assert.ok(!schedule(at(2026, 11, 17, 9)).some((s) => s.slot === 'parade'));
   const thisWeek = pickEvent(schedule(MON + HOUR).find((s) => s.slot === 'race'), 0);
   const nextWeek = pickEvent(schedule(addDays(MON, 7) + HOUR).find((s) => s.slot === 'race'), 0);
   assert.notEqual(thisWeek, nextWeek);

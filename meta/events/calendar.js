@@ -63,6 +63,14 @@ function periodAt(period, now) {
   if (period === 'month') return monthAt(now);
   if (period === 'week') return { start: weekStart(now), end: addDays(weekStart(now), 7) };
   if (period === 'forever') return { start: 0, end: null };
+  if (period === 'firstFriday10') {
+    // From the first Friday of the month, for ten days; otherwise not running.
+    const m = monthAt(now);
+    let f = m.start;
+    while (weekday(f) !== 4) f = addDays(f, 1);
+    const end = addDays(f, 10);
+    return now >= f && now < end ? { start: f, end } : { skip: true };
+  }
   return blockAt(now);
 }
 
@@ -75,6 +83,7 @@ export function schedule(now, calendar = CALENDAR) {
   const turn = weekNumber(now);
   for (const entry of calendar.always || []) {
     const p = periodAt(entry.period, now);
+    if (p.skip) continue;
     out.push({ slot: entry.slot, slotId: `${entry.slot}@${p.start}`, start: p.start, end: p.end, events: entry.events, turn, replace: false });
   }
   const block = blockAt(now);

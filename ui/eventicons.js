@@ -662,6 +662,16 @@ const SHOW_COLORS = {
   clipboard: ['#6fb010', '#386400'], gift: ['#a45cf0', '#5a1ea8'], present: ['#f0a800', '#8a5200'],
   booklet: ['#1c62f0', '#06247c'], star: ['#6a86b8', '#2c4068'],
 };
+// A new badge from outside (the mini-games register their own):
+//   addPicture('pick', { types: ['dig'], ids: ['understage'], colors: [strong, dark],
+//                        badge: [pale, ring], paint(ctx) { ... out of 100 ... } })
+export function addPicture(name, { types = [], ids = [], colors, badge, paint }) {
+  for (const t of types) PICTURE_BY_TYPE[t] = name;
+  for (const i of ids) PICTURE_BY_ID[i] = name;
+  if (colors) SHOW_COLORS[name] = colors;
+  if (badge) BADGE[name] = badge;
+  if (paint) PICTURES[name] = paint;
+}
 export function eventColors(event) {
   return SHOW_COLORS[eventPicture(event)] || SHOW_COLORS.star;
 }

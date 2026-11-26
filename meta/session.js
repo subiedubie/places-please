@@ -10,6 +10,10 @@ import { attachShop } from './shop.js'; // boosters, extra moves, bonus-level pa
 import { createEvents } from './events/index.js'; // the side games
 import { createRewards } from './rewards.js'; // the rewards tray
 import { createAlbum } from './album.js'; // the card album
+import { createTeam } from './team.js'; // your company of computer castmates
+import { createLives } from './lives.js'; // hearts
+import { LIVES } from '../config/lives.js';
+import { createHistory } from './history.js'; // the log of every level played
 
 // Which free power-ups the next level starts with, given the current win
 // streak. The steps are in config/economy.js (streakGift).
@@ -67,6 +71,8 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
         }
       }
       // Streak gift: free power-ups on the board for wins in a row.
+      const fresh = !game;
+      const pre = (session.preBoosters || []).slice();
       if (!game) game = newGame(level, now(), undefined, {
         // ...plus the pre-level boosters chosen on Home (each spends one).
         // ...plus the power-ups of any timed boost running now (rewards tray).
@@ -78,6 +84,7 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
       });
       session.level = game.level;
       session.game = game;
+      if (fresh) history.begin(level, now(), pre, streakGift(session.save.streak).length + rewards.startPowers(now()).length);
       session.save.current = serialize(game);
       write();
       return game;
@@ -176,6 +183,8 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
       const settlement = session.addBonusPay(game, settleLevel(game, names));
       const firstAttempt = events.firstAttempt(game.level.n);
       session.save = applyResult(session.save, game, settlement);
+      history.end(game, now());
+      if (game.status !== 'won') lives.lose(now());
       // Tell every running side game about this level. eventLines says what
       // it added to each; newRewards are the prizes just put in the tray.
       const { eventLines, newRewards } = events.onLevel({
@@ -236,10 +245,13 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
   // Each call below saves afterwards, because looking at the list can itself
   // start or end an event when the clock has moved on.
   const getSave = () => session.save;
+  const team = createTeam(getSave);
   const album = createAlbum(getSave, {
     add: (...args) => rewards.add(...args),
-  });
-  const rewards = createRewards(getSave, { openPack: (t) => album.openPack(t) });
+  }, undefined, team, (name, n) => events.count(name, n, now()));
+  const lives = createLives(getSave, undefined, { maxNow: (t) => (events.passGold(t) ? LIVES.passMax : LIVES.max) });
+  const history = createHistory(getSave);
+  const rewards = createRewards(getSave, { openPack: (t, gold) => album.openPack(t, gold), lives });
   const events = createEvents(getSave, rewards);
   const saved = (value) => {
     write();
@@ -249,6 +261,8 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     list: (t) => saved(events.list(t)),
     detail: (id, t) => saved(events.detail(id, t)),
     start: (id, t) => saved(events.start(id, t)),
+    act: (id, action, t) => saved(events.act(id, action, t)),
+    count: (name, n, t) => saved(events.count(name, n, t)),
   };
   // The Box Office.
   const market = createMarket(getSave, rewards);
@@ -265,6 +279,32 @@ export function createSession(storage, { now = () => Date.now(), names = {} } = 
     active: (t) => saved(rewards.active(t)),
   };
   session.album = (t) => saved(album.view(t));
+  session.albumAsk = (s, c, t) => saved(album.ask(s, c, t));
+  session.albumGive = (id, t) => saved(album.give(id, t));
+  session.lives = {
+    view: (t) => saved(lives.view(t)),
+    canPlay: (t) => lives.canPlay(t),
+    refill: (t) => saved(lives.refill(t)),
+    // Ask the company for lives: they arrive over the next while.
+    ask: (t) => {
+      const times = team.askLives(t);
+      if (times) lives.expect(times, t);
+      return saved(Boolean(times));
+    },
+  };
+  session.history = { summary: () => history.summary(), note: (kind) => history.note(kind) };
+  session.team = {
+    view: (t) => saved(team.view(t)),
+    requests: (t) => saved(team.openRequests(t)),
+    setAvatar: (name, t) => saved(team.setAvatar(name, t)),
+    askLives: (t) => saved(team.askLives(t)),
+    nextLifeAsk: (t) => team.nextLifeAsk(t),
+    helped: (id, t) => {
+      const ok = team.helped(id, t);
+      if (ok && team.config.helpReward) rewards.grant(team.config.helpReward, t);
+      return saved(ok);
+    },
+  };
 
   // Adds useBooster, buyBooster, buyMoves, setPreBoosters (meta/shop.js).
   attachShop(session, write);

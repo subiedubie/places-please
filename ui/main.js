@@ -432,6 +432,8 @@ initHelp({ session }); // the "?" and "How to play" buttons
 // (A level already begun has had its boosters, so it goes straight on.)
 $('home-play').onclick = () => {
   if (session.save.current) { startLevel(); return; }
+  // No lives left: the lives sheet (wait, ask the company, or refill).
+  if (session.lives && !session.lives.canPlay(Date.now())) { eventUi.openLives(); return; }
   const next = session.peekLevel();
   ui.prelevel(next, session.save, next.bonus ? null : session.market.tierReward(next.tier), eventUi.renderReward);
 };
@@ -439,7 +441,10 @@ $('pre-play').onclick = () => { $('prelevel').hidden = true; startLevel(); };
 $('pre-x').onclick = () => { $('prelevel').hidden = true; };
 $('prelevel').onclick = (e) => { if (e.target.id === 'prelevel') $('prelevel').hidden = true; };
 $('home-settings').onclick = () => goSettings('');
-$('results-next').onclick = startLevel;
+$('results-next').onclick = () => {
+  if (!session.save.current && session.lives && !session.lives.canPlay(Date.now())) { goHome(); eventUi.openLives(); return; }
+  startLevel();
+};
 $('results-home').onclick = () => goHome();
 $('settings-back').onclick = () => { ui.hideRoundBanner(); goHome(); };
 
